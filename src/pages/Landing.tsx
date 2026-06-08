@@ -3,45 +3,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   Activity, 
-  Shield, 
   Cpu, 
   FileText, 
-  Users, 
   ArrowRight, 
-  CheckCircle2, 
   Database, 
-  Plus, 
   Menu, 
   X,
-  Stethoscope,
-  ChevronRight,
-  TrendingUp,
-  Layers,
-  Sparkles
+  Stethoscope
 } from 'lucide-react';
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanComplete, setScanComplete] = useState(false);
-
-  // Simulated bounding boxes for X-ray
-  const boundingBoxes = [
-    { id: 1, label: 'Dental Caries (94%)', x: '18%', y: '42%', w: '8%', h: '8%', color: 'border-red-500 bg-red-500/10 text-red-400' },
-    { id: 2, label: 'Crown (98%)', x: '45%', y: '35%', w: '10%', h: '12%', color: 'border-emerald-500 bg-emerald-500/10 text-emerald-400' },
-    { id: 3, label: 'Implant (91%)', x: '72%', y: '48%', w: '9%', h: '15%', color: 'border-amber-500 bg-amber-500/10 text-amber-400' },
-    { id: 4, label: 'Impacted Tooth (89%)', x: '83%', y: '58%', w: '11%', h: '14%', color: 'border-purple-500 bg-purple-500/10 text-purple-400' },
-  ];
-
-  const handleScan = () => {
-    setIsScanning(true);
-    setScanComplete(false);
-    setTimeout(() => {
-      setIsScanning(false);
-      setScanComplete(true);
-    }, 2500);
-  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 selection:bg-teal-100 selection:text-teal-900">

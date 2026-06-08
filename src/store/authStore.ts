@@ -26,8 +26,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   signOut: async () => {
     set({ loading: true });
-    await supabase.auth.signOut();
-    set({ user: null, session: null, loading: false });
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Force clear local session data as fallback (SRS-09)
+      set({ user: null, session: null, loading: false });
+      throw new Error("Network connection error. Cannot log out at this time.");
+    } finally {
+      // Clear local session data (SRS-06)
+      set({ user: null, session: null, loading: false });
+    }
   },
   initialize: async () => {
     try {

@@ -3,7 +3,16 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from '@/pages/Landing';
 import AuthPage from '@/pages/Auth';
 import PatientsPage from '@/pages/Patients';
+import PatientEntryPage from '@/pages/PatientEntry';
+import PatientProfilePage from '@/pages/PatientProfile';
+import PatientDetailPage from '@/pages/PatientDetail';
+import AIAnalysisPage from '@/pages/AIAnalysis';
+import SettingsPage from '@/pages/Settings';
+import MainLayout from '@/components/MainLayout';
 import { useAuthStore } from '@/store/authStore';
+import ToastContainer from '@/components/ToastContainer';
+import ConfirmationModal from '@/components/ConfirmationModal';
+
 
 // Protected Route Guard
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -27,6 +36,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Public Route Guard (prevents logged in users from visiting auth pages)
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, initialized } = useAuthStore();
+  const [shouldRedirect, setShouldRedirect] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      // Delay the redirect so the login success message can be seen
+      const timer = setTimeout(() => {
+        setShouldRedirect(true);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
 
   if (!initialized || loading) {
     return (
@@ -36,7 +56,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (user) {
+  if (shouldRedirect) {
     return <Navigate to="/patients" replace />;
   }
 
@@ -52,6 +72,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ToastContainer />
+      <ConfirmationModal />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route 
@@ -74,7 +96,59 @@ export default function App() {
           path="/patients" 
           element={
             <ProtectedRoute>
-              <PatientsPage />
+              <MainLayout>
+                <PatientsPage />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/patients/:id" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <PatientProfilePage />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/patients/:id/charts/:chartId" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <PatientDetailPage />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/patient-entry" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <PatientEntryPage />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/ai-analysis" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <AIAnalysisPage />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/settings" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <SettingsPage />
+              </MainLayout>
             </ProtectedRoute>
           } 
         />
