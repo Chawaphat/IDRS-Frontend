@@ -170,7 +170,7 @@ export default function PatientsPage() {
 
           <button 
             onClick={() => navigate('/patient-entry')}
-            className="group bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl p-6 border border-transparent shadow-sm shadow-teal-500/20 hover:shadow-md hover:shadow-teal-500/40 flex items-center justify-between transition-all active:scale-[0.98]"
+            className="group bg-teal-500 hover:bg-teal-600 rounded-3xl p-6 border border-transparent shadow-sm flex items-center justify-between transition-all active:scale-[0.98]"
           >
             <div className="flex items-center gap-5">
               <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0 group-hover:scale-110 transition-transform">

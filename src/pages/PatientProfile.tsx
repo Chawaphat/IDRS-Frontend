@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { patientService } from '@/services/patientService';
 import type { BackendPatient, ImageManagement } from '@/services/patientService';
 import { dentalChartService } from '@/services/dentalChartService';
 import type { DentalChart } from '@/services/types/dentalChart';
-import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, Stethoscope, PanelLeftClose, PanelLeft, X } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, Stethoscope, PanelLeftClose, PanelLeft, X, Trash2, AlertTriangle } from 'lucide-react';
 import { useToastStore } from '@/store/toastStore';
 import type { Patient } from './Patients';
 import { useAuthStore } from '@/store/authStore';
@@ -12,7 +15,7 @@ import { useAuthStore } from '@/store/authStore';
 const SIDEBAR_MENUS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'charts', label: 'Clinical Charts', icon: Stethoscope },
-  { id: 'images', label: 'Radiography', icon: ImageIcon },
+  { id: 'images', label: 'Images', icon: ImageIcon },
 ];
 
 export default function PatientProfilePage() {
@@ -33,6 +36,9 @@ export default function PatientProfilePage() {
   const [images, setImages] = useState<ImageManagement[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [isCreatingChart, setIsCreatingChart] = useState(false);
+
+  const [chartToDelete, setChartToDelete] = useState<DentalChart | null>(null);
+  const [isDeletingChart, setIsDeletingChart] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -143,6 +149,27 @@ export default function PatientProfilePage() {
     }
   };
 
+  const confirmDeleteChart = (e: React.MouseEvent, chart: DentalChart) => {
+    e.stopPropagation();
+    setChartToDelete(chart);
+  };
+
+  const executeDeleteChart = async () => {
+    if (!chartToDelete) return;
+    try {
+      setIsDeletingChart(true);
+      await dentalChartService.delete(chartToDelete.chart_id); // SRS-60
+      setCharts(prev => prev.filter(c => c.chart_id !== chartToDelete.chart_id)); // SRS-61
+      showToast("Dental chart deleted successfully", "success"); // SRS-62
+    } catch (err) {
+      console.error("Failed to delete dental chart", err);
+      showToast("Cannot connect to the database. Failed to delete dental chart.", "error"); // SRS-63
+    } finally {
+      setIsDeletingChart(false);
+      setChartToDelete(null);
+    }
+  };
+
   const refreshChartsList = async () => {
     if (!id) return;
     try {
@@ -177,12 +204,14 @@ export default function PatientProfilePage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleImageClick = async (chartId: string, imageId: string) => {
     try {
       // Send request to retrieve detailed data for selected image (SRS-01)
       await patientService.getImageById(chartId, imageId);
       // Redirect to Chart Detail upon successful data retrieval (SRS-04)
       navigate(`/patients/${patient?.id}/charts/${chartId}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 404) {
@@ -572,7 +601,7 @@ export default function PatientProfilePage() {
                                 <button 
                                     onClick={handleCreateChart}
                                     disabled={isCreatingChart}
-                                    className="flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-sm px-4 h-10 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 gap-2"
+                                    className="flex items-center justify-center bg-teal-500 hover:bg-teal-600 text-white rounded-xl shadow-sm px-4 h-10 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 gap-2"
                                 >
                                     {isCreatingChart ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><Plus className="w-4 h-4" /> New Chart</>}
                                 </button>
@@ -625,7 +654,7 @@ export default function PatientProfilePage() {
                                     
                                     <button 
                                         onClick={() => setActiveMenu('charts')}
-                                        className="w-full sm:w-auto shrink-0 text-sm font-semibold text-teal-600 hover:text-teal-700 hover:bg-teal-50 px-6 py-4 rounded-xl text-center transition-colors border border-transparent hover:border-teal-100 flex items-center justify-center gap-2 h-full"
+                                        className="w-full sm:w-auto shrink-0 text-sm font-bold text-teal-600 hover:text-teal-700 hover:bg-teal-50 px-4 py-2.5 rounded-xl text-center transition-colors border border-transparent flex items-center justify-center gap-1.5"
                                     >
                                         View All <ChevronRight className="w-4 h-4" />
                                     </button>
@@ -638,7 +667,7 @@ export default function PatientProfilePage() {
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-800">Images Overview</h3>
-                                    <p className="text-sm text-slate-500 mt-0.5">Radiography & Intraoral Photos</p>
+                                    <p className="text-sm text-slate-500 mt-0.5">X-ray Photos & Intraoral Photos</p>
                                 </div>
                             </div>
                             <div className="flex-1 flex items-center justify-center">
@@ -649,7 +678,7 @@ export default function PatientProfilePage() {
                                     </svg>
                                     <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-xl shadow-sm border border-slate-200 text-sm font-bold text-slate-600 flex items-center gap-2">
                                         <ImageIcon className="w-5 h-5 text-slate-400" />
-                                        Radiography Placeholder
+                                        Images Placeholder
                                     </div>
                                 </div>
                             </div>
@@ -668,7 +697,7 @@ export default function PatientProfilePage() {
                             <button 
                                 onClick={handleCreateChart}
                                 disabled={isCreatingChart}
-                                className="flex items-center bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-sm px-5 h-10 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center bg-teal-500 hover:bg-teal-600 text-white rounded-xl shadow-sm px-5 h-10 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isCreatingChart ? (
                                     <>
@@ -758,7 +787,14 @@ export default function PatientProfilePage() {
                                                     )}
                                                 </div>
 
-                                                <div className="flex items-center justify-end shrink-0 self-end md:self-center w-full md:w-auto mt-2 md:mt-0">
+                                                <div className="flex items-center justify-end shrink-0 self-end md:self-center w-full md:w-auto mt-2 md:mt-0 gap-2">
+                                                    <button 
+                                                        onClick={(e) => confirmDeleteChart(e, chart)}
+                                                        className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100/80 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-all duration-300"
+                                                        title="Delete Chart"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
                                                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100/80 text-slate-400 group-hover:bg-[#f0faf6] group-hover:text-[#1D9E75] transition-all duration-300">
                                                         <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                                                     </div>
@@ -772,12 +808,12 @@ export default function PatientProfilePage() {
                     </div>
                 )}
                 
-                {/* Radiography Images Section */}
+                {/*  Images Section */}
                 {activeMenu === 'images' && (
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex-1 flex flex-col min-h-0">
                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 shrink-0">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-800">Radiography & Photos</h3>
+                                <h3 className="text-lg font-bold text-slate-800">X-ray & Photos</h3>
                                 <p className="text-sm text-slate-500">Intraoral photos and panoramic X-ray scans</p>
                             </div>
                         </div>
@@ -790,7 +826,7 @@ export default function PatientProfilePage() {
                                 </svg>
                                 <div className="bg-white/90 backdrop-blur-sm px-6 py-4 rounded-xl shadow-lg border border-slate-200 flex flex-col items-center gap-2">
                                     <ImageIcon className="w-8 h-8 text-slate-400" />
-                                    <span className="text-base font-bold text-slate-700">Radiography Module</span>
+                                    <span className="text-base font-bold text-slate-700">Images Module</span>
                                     <span className="text-sm text-slate-500">Mockup placeholder (Coming Soon)</span>
                                 </div>
                             </div>
@@ -943,6 +979,62 @@ export default function PatientProfilePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Chart Confirmation Modal (SRS-59) */}
+      {chartToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            onClick={() => !isDeletingChart && setChartToDelete(null)}
+          />
+          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Delete Dental Chart</h3>
+                <p className="text-sm text-slate-500 mt-1">This action cannot be undone.</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 mt-2">
+              <p className="text-sm text-slate-600">
+                Are you sure you want to delete the clinical chart created on <strong>{new Date(chartToDelete.created_at).toLocaleDateString()}</strong> at <strong>{new Date(chartToDelete.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>?
+              </p>
+              <p className="text-sm text-slate-600 mt-2 font-medium">
+                All associated records, diagnoses, and notes will be permanently removed.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setChartToDelete(null)}
+                disabled={isDeletingChart}
+                className="h-11 px-5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteChart}
+                disabled={isDeletingChart}
+                className="h-11 px-6 rounded-xl font-semibold text-sm bg-rose-500 hover:bg-rose-600 text-white shadow-md shadow-rose-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isDeletingChart ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete Chart"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

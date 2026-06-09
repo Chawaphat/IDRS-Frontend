@@ -56,9 +56,9 @@ export const FacialSymmetry: React.FC<FacialSymmetryProps> = ({ value, onChange 
 
             <div className="bg-slate-100/70 border border-slate-200/60 rounded-[10px] p-4 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-slate-300/50"></div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-4">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-200/60 pb-2">
                     <Info className="w-3.5 h-3.5" />
-                    Reference Guide (Not Selectable)
+                    Examples of Asymmetry
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                     {[

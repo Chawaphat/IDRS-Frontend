@@ -137,9 +137,13 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-48">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
-      </div>
+        <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center min-h-[60vh] rounded-3xl">
+            <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-500 rounded-full animate-spin mb-6 shadow-sm" />
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Section</h3>
+                <p className="text-slate-500 font-medium">Retrieving clinical data...</p>
+            </div>
+        </div>
     );
   }
 
@@ -339,7 +343,7 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                                   onClick={() => {
                                       setHasMedications(true);
                                   }}
-                                  className="flex-1 min-h-11 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition-all"
+                                  className="flex-1 min-h-11 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-sm shadow-md transition-all"
                               >
                                   Yes, Has Medications
                               </button>
@@ -399,7 +403,7 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                               </div>
                               <div className="space-y-2">
                                   <Label htmlFor="timeOfDay" className="text-xs font-bold text-slate-700">Time of Day</Label>
-                                  <Input id="timeOfDay" type="text" className="focus-visible:ring-teal-500 bg-white" placeholder="e.g., 08:00" value={medFormInput.timeOfDay} onChange={(e) => setMedFormInput(prev => ({ ...prev, timeOfDay: e.target.value }))} />
+                                  <Input id="timeOfDay" type="time" className="focus-visible:ring-teal-500 bg-white cursor-text" value={medFormInput.timeOfDay} onChange={(e) => setMedFormInput(prev => ({ ...prev, timeOfDay: e.target.value }))} />
                               </div>
                           </div>
 
@@ -419,7 +423,7 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                                       setMedFormInput({ name: "", dose: "", frequency: "", dosePerTime: "", timeOfDay: "" });
                                   }
                               }}
-                              className="bg-teal-600 hover:bg-teal-700 text-white font-bold"
+                              className="bg-teal-500 hover:bg-teal-600 text-white font-bold"
                           >
                               + Add Medication
                           </Button>

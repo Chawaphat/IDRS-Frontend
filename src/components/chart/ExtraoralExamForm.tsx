@@ -131,11 +131,19 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-slate-500 animate-pulse">Loading Extraoral Examination...</div>;
+    return (
+        <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center min-h-[60vh] rounded-3xl">
+            <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-500 rounded-full animate-spin mb-6 shadow-sm" />
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Section</h3>
+                <p className="text-slate-500 font-medium">Retrieving clinical data...</p>
+            </div>
+        </div>
+    );
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+    <div className="space-y-8 pb-12">
       <div className="border-b border-slate-200 pb-4 flex items-start justify-between">
         <div>
           <h2 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
@@ -372,13 +380,18 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
 
             {formData.parafunctional_habit_other !== null && (
               <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                <Input
-                  value={formData.parafunctional_habit_other || ''}
-                  onChange={e => updateField('parafunctional_habit_other', e.target.value)}
-                  className="focus-visible:ring-amber-500 border-amber-200"
-                  placeholder="Specify other parafunctional habit..."
-                  autoFocus
-                />
+                <div className="flex bg-amber-50/50 border border-amber-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-amber-500 focus-within:border-transparent transition-all shadow-sm">
+                  <span className="flex items-center px-4 bg-amber-100/50 text-amber-800 text-sm font-semibold border-r border-amber-200 whitespace-nowrap">
+                    Other
+                  </span>
+                  <Input
+                    value={formData.parafunctional_habit_other || ''}
+                    onChange={e => updateField('parafunctional_habit_other', e.target.value)}
+                    className="flex-1 border-0 focus-visible:ring-0 rounded-none bg-transparent px-4"
+                    placeholder="Specify..."
+                    autoFocus
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -408,40 +421,50 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
             {(formData.factors_affecting_tooth_wear?.['Hard food'] || formData.factors_affecting_tooth_wear?.['Other']) && (
               <div className="pt-2 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                 {formData.factors_affecting_tooth_wear?.['Hard food'] && (
-                  <Input
-                    value={formData.factors_affecting_tooth_wear?.['wearHardFoodDetail'] || ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setFormData(prev => ({
-                        ...prev,
-                        factors_affecting_tooth_wear: {
-                          ...(prev.factors_affecting_tooth_wear || {}),
-                          wearHardFoodDetail: val
-                        }
-                      }));
-                    }}
-                    className="focus-visible:ring-amber-500 border-amber-200"
-                    placeholder="Specify hard food type..."
-                    autoFocus
-                  />
+                  <div className="flex bg-amber-50/50 border border-amber-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-amber-500 focus-within:border-transparent transition-all shadow-sm">
+                    <span className="flex items-center px-4 bg-amber-100/50 text-amber-800 text-sm font-semibold border-r border-amber-200 whitespace-nowrap">
+                      Hard food
+                    </span>
+                    <Input
+                      value={formData.factors_affecting_tooth_wear?.['wearHardFoodDetail'] || ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          factors_affecting_tooth_wear: {
+                            ...(prev.factors_affecting_tooth_wear || {}),
+                            wearHardFoodDetail: val
+                          }
+                        }));
+                      }}
+                      className="flex-1 border-0 focus-visible:ring-0 rounded-none bg-transparent px-4"
+                      placeholder="Specify type..."
+                      autoFocus
+                    />
+                  </div>
                 )}
                 {formData.factors_affecting_tooth_wear?.['Other'] && (
-                  <Input
-                    value={formData.factors_affecting_tooth_wear?.['wearOtherDetail'] || ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setFormData(prev => ({
-                        ...prev,
-                        factors_affecting_tooth_wear: {
-                          ...(prev.factors_affecting_tooth_wear || {}),
-                          wearOtherDetail: val
-                        }
-                      }));
-                    }}
-                    className="focus-visible:ring-amber-500 border-amber-200"
-                    placeholder="Specify other tooth wear factors..."
-                    autoFocus
-                  />
+                  <div className="flex bg-amber-50/50 border border-amber-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-amber-500 focus-within:border-transparent transition-all shadow-sm">
+                    <span className="flex items-center px-4 bg-amber-100/50 text-amber-800 text-sm font-semibold border-r border-amber-200 whitespace-nowrap">
+                      Other
+                    </span>
+                    <Input
+                      value={formData.factors_affecting_tooth_wear?.['wearOtherDetail'] || ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          factors_affecting_tooth_wear: {
+                            ...(prev.factors_affecting_tooth_wear || {}),
+                            wearOtherDetail: val
+                          }
+                        }));
+                      }}
+                      className="flex-1 border-0 focus-visible:ring-0 rounded-none bg-transparent px-4"
+                      placeholder="Specify factor..."
+                      autoFocus
+                    />
+                  </div>
                 )}
               </div>
             )}
