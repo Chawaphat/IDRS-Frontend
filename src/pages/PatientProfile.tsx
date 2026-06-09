@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { patientService } from '@/services/patientService';
 import type { BackendPatient, ImageManagement } from '@/services/patientService';
-import { clinicalService } from '@/services/clinicalService';
-import type { DentalChart } from '@/services/clinicalService';
+import { dentalChartService } from '@/services/dentalChartService';
+import type { DentalChart } from '@/services/types/dentalChart';
 import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, Stethoscope, PanelLeftClose, PanelLeft, X } from 'lucide-react';
 import { useToastStore } from '@/store/toastStore';
 import type { Patient } from './Patients';
@@ -36,6 +36,7 @@ export default function PatientProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const hasOpenedEditFromRoute = useRef(false);
   const [editForm, setEditForm] = useState({
     name: '',
     sex: 'Male',
@@ -55,6 +56,18 @@ export default function PatientProfilePage() {
     });
     setIsEditing(true);
   };
+
+  useEffect(() => {
+    const stateData = location.state as { openEditProfile?: boolean } | null;
+    if (!patient || !stateData?.openEditProfile || hasOpenedEditFromRoute.current) return;
+
+    hasOpenedEditFromRoute.current = true;
+    handleOpenEdit();
+    navigate(location.pathname, {
+      replace: true,
+      state: { ...stateData, openEditProfile: false }
+    });
+  }, [patient, location.state, location.pathname, navigate]);
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,7 +146,7 @@ export default function PatientProfilePage() {
   const refreshChartsList = async () => {
     if (!id) return;
     try {
-      const chartsRes = await clinicalService.getDentalCharts(id);
+      const chartsRes = await dentalChartService.getByPatient(id);
       setCharts(chartsRes);
       if (chartsRes.length > 0) {
         await fetchImages(chartsRes);
@@ -148,7 +161,7 @@ export default function PatientProfilePage() {
   const handleChartClick = async (chartId: string) => {
     try {
       // Send request to retrieve detailed data for selected chart (SRS-01)
-      await clinicalService.getDentalChartById(chartId);
+      await dentalChartService.getById(chartId);
       // Redirect to Chart Detail upon successful data retrieval (SRS-04)
       navigate(`/patients/${patient?.id}/charts/${chartId}`);
     } catch (err: any) {
@@ -234,7 +247,7 @@ export default function PatientProfilePage() {
         // Fetch charts
         let chartsRes: DentalChart[] = [];
         try {
-          chartsRes = await clinicalService.getDentalCharts(id);
+          chartsRes = await dentalChartService.getByPatient(id);
         } catch (chartErr: any) {
           if (chartErr?.response?.status !== 404) {
             throw chartErr;
@@ -417,7 +430,7 @@ export default function PatientProfilePage() {
 
     try {
       setIsCreatingChart(true);
-      const newChart = await clinicalService.createDentalChart({
+      const newChart = await dentalChartService.create({
         patient_id: patient.id,
         dentist_id: user.id
       });
@@ -586,53 +599,71 @@ export default function PatientProfilePage() {
                                         <div key={chart.chart_id} className="relative group">
                                             {/* Timeline Line Connector */}
                                             {index < sortedCharts.length - 1 && (
-                                                <div className="absolute -left-[33px] top-12 -bottom-11 w-[2px] bg-slate-100 group-hover:bg-teal-300 transition-colors" />
+                                                <div className="absolute -left-[33px] top-12 -bottom-11 w-[2px] bg-slate-100 group-hover:bg-[#1D9E75]/30 transition-colors" />
                                             )}
 
                                             {/* Timeline Dot Indicator */}
                                             {index === 0 ? (
-                                                <div className="absolute top-5 -left-[49px] w-8 h-8 rounded-full bg-teal-50 border-2 border-teal-500 flex items-center justify-center shadow-md transition-all group-hover:scale-110 z-10">
+                                                <div className="absolute top-6 -left-[49px] w-8 h-8 rounded-full bg-[#f0faf6] border-2 border-[#1D9E75] flex items-center justify-center shadow-md transition-all group-hover:scale-110 z-10">
                                                     <span className="relative flex h-3 w-3">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-600"></span>
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1D9E75] opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-[#1D9E75]"></span>
                                                     </span>
                                                 </div>
                                             ) : (
-                                                <div className="absolute top-5 -left-[49px] w-8 h-8 rounded-full bg-white border-2 border-slate-200 group-hover:border-teal-500 flex items-center justify-center shadow-sm transition-all group-hover:scale-110 z-10">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300 group-hover:bg-teal-500 transition-colors" />
+                                                <div className="absolute top-6 -left-[49px] w-8 h-8 rounded-full bg-white border-2 border-slate-200 group-hover:border-[#1D9E75] flex items-center justify-center shadow-sm transition-all group-hover:scale-110 z-10">
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300 group-hover:bg-[#1D9E75] transition-colors" />
                                                 </div>
                                             )}
 
-                                            {/* Timeline Card */}
+                                            {/* Timeline Content (Redesigned from Container) */}
                                             <div 
                                                 onClick={() => handleChartClick(chart.chart_id)}
-                                                className="bg-slate-50 border border-slate-200 rounded-2xl p-6 hover:bg-white hover:shadow-lg hover:border-teal-400 transition-all cursor-pointer flex flex-col md:flex-row gap-6 items-start md:items-center justify-between group-hover:translate-x-1"
+                                                className="py-4 pl-4 pr-6 hover:bg-slate-50/80 rounded-2xl transition-all cursor-pointer flex flex-col md:flex-row gap-6 items-start md:items-center justify-between group-hover:translate-x-1"
                                             >
-                                                <div className="space-y-2 flex-1">
+                                                <div className="space-y-2.5 flex-1 w-full">
                                                     <div className="flex flex-wrap items-center gap-3">
-                                                        <h4 className="font-bold text-slate-900 text-lg group-hover:text-teal-700 transition-colors">
-                                                            Clinical Visit - {new Date(chart.created_at).toLocaleDateString()}
+                                                        <h4 className="font-bold text-slate-800 text-base group-hover:text-[#1D9E75] transition-colors">
+                                                            Clinical Visit
                                                         </h4>
-                                                        <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-[#f0faf6] text-[#1D9E75] border border-[#1D9E75]/20">
                                                             Completed
                                                         </span>
                                                         {index === 0 && (
-                                                            <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-teal-100 text-teal-800 border border-teal-200">
+                                                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-[#f0faf6] text-[#1D9E75] border border-[#1D9E75]/20 shadow-sm shadow-[#1D9E75]/5 animate-pulse">
                                                                 Latest Visit
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-sm text-slate-400 italic line-clamp-2 max-w-2xl">
-                                                        {chart.notes || "Contains odontogram and clinical examination records."}
-                                                    </p>
+                                                    
+                                                    {/* Visit Timestamp & Metadata Row */}
+                                                    <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-[12px] font-medium text-slate-500">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                                            {new Date(chart.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                        </span>
+                                                        <span className="text-slate-300">•</span>
+                                                        <span className="flex items-center gap-1.5">
+                                                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                                            {new Date(chart.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                        <span className="text-slate-300">•</span>
+                                                        <span className="flex items-center gap-1 text-slate-400">
+                                                            ID: #{chart.chart_id.slice(0, 8)}
+                                                        </span>
+                                                    </div>
+
+                                                    {chart.notes && (
+                                                        <div className="mt-2 text-sm text-slate-600 flex items-start gap-2 max-w-3xl bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                                                            <p className="line-clamp-2 leading-relaxed">{chart.notes}</p>
+                                                        </div>
+                                                    )}
                                                 </div>
 
-                                                <div className="flex items-center gap-6 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100 mt-2 md:mt-0">
-                                                    <div className="flex items-center text-xs text-slate-500 font-semibold gap-3">
-                                                        <span className="flex items-center gap-1.5 bg-slate-200/50 px-2.5 py-1.5 rounded-lg text-slate-600"><Calendar className="w-4 h-4 text-slate-400" /> {new Date(chart.created_at).toLocaleDateString()}</span>
-                                                        <span className="flex items-center gap-1.5 bg-slate-200/50 px-2.5 py-1.5 rounded-lg text-slate-600"><Clock className="w-4 h-4 text-slate-400" /> {new Date(chart.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                <div className="flex items-center justify-end shrink-0 self-end md:self-center w-full md:w-auto mt-2 md:mt-0">
+                                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100/80 text-slate-400 group-hover:bg-[#f0faf6] group-hover:text-[#1D9E75] transition-all duration-300">
+                                                        <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                                                     </div>
-                                                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-teal-500 group-hover:translate-x-1.5 transition-all" />
                                                 </div>
                                             </div>
                                         </div>
@@ -859,4 +890,3 @@ export default function PatientProfilePage() {
     </div>
   );
 }
-

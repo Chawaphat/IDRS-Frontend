@@ -18,7 +18,9 @@ export const useToastStore = create<ToastState>((set) => ({
   show: (message, type = 'info', duration = 3000) => {
     const id = Math.random().toString(36).substring(2, 9);
     set((state) => ({
-      toasts: [...state.toasts, { id, message, type, duration }],
+      toasts: state.toasts.some((toast) => toast.message === message && toast.type === type)
+        ? state.toasts
+        : [...state.toasts, { id, message, type, duration }],
     }));
 
     if (duration > 0) {

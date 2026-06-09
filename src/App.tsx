@@ -10,6 +10,7 @@ import AIAnalysisPage from '@/pages/AIAnalysis';
 import SettingsPage from '@/pages/Settings';
 import MainLayout from '@/components/MainLayout';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
 import ToastContainer from '@/components/ToastContainer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 
@@ -36,17 +37,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Public Route Guard (prevents logged in users from visiting auth pages)
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, initialized } = useAuthStore();
-  const [shouldRedirect, setShouldRedirect] = React.useState(false);
+  const { show: showToast } = useToastStore();
+  const hasShownToast = React.useRef(false);
 
-  React.useEffect(() => {
-    if (user) {
-      // Delay the redirect so the login success message can be seen
-      const timer = setTimeout(() => {
-        setShouldRedirect(true);
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [user]);
+  // Toast is now handled by the destination page via location state
 
   if (!initialized || loading) {
     return (
@@ -56,8 +50,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (shouldRedirect) {
-    return <Navigate to="/patients" replace />;
+  if (user) {
+    return <Navigate to="/patients" state={{ showLoginSuccess: true }} replace />;
   }
 
   return <>{children}</>;

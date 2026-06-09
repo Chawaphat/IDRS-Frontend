@@ -58,6 +58,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     const initials = displayName.substring(0, 2).toUpperCase();
     const roleName = profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : 'Dentist';
 
+    // Check if we are in the detailed patient charting view
+    const isChartingView = pathname?.match(/^\/patients\/[^/]+\/charts\/[^/]+$/);
+
+    if (isChartingView) {
+        return (
+            <div className="flex h-screen bg-[#f8fafc] text-slate-800 font-sans overflow-hidden">
+                <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                    {children}
+                </main>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-screen bg-[#f8fafc] text-slate-900 font-sans overflow-hidden selection:bg-teal-100 selection:text-teal-900">
             {/* Sidebar Navigation */}

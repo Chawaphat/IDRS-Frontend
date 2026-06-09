@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect, useRef } from 'react';
 import { Stethoscope, ArrowLeft, Mail, Lock, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -48,8 +49,6 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
   useEffect(() => {
     // 1. Check if user is successfully logged in (either via email/password or OAuth redirect)
     if (user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSuccessMsg('Logged In Successfully');
       return;
     }
 
@@ -263,10 +262,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
         }
         
         // Success SRS-05, SRS-06
-        setSuccessMsg('Logged In Successfully');
-        setTimeout(() => {
-          navigate('/patients');
-        }, 800);
+        // Toast and redirect are now handled instantly by App.tsx PublicRoute
       } else {
         const { error } = await supabase.auth.signUp({
           email,

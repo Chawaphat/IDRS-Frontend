@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Users, 
   Search, 
@@ -41,6 +42,19 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const askConfirm = useConfirmStore((state) => state.ask);
   const showToast = useToastStore((state) => state.show);
+  const location = useLocation();
+
+  const hasShownLoginToast = React.useRef(false);
+
+  useEffect(() => {
+    const state = location.state as { showLoginSuccess?: boolean } | null;
+    if (state?.showLoginSuccess && !hasShownLoginToast.current) {
+      hasShownLoginToast.current = true;
+      showToast('Logged In Successfully', 'success');
+      // Clear the React Router state so it doesn't fire again on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, showToast, navigate, location.pathname]);
 
   const mapBackendPatientToPatient = (p: BackendPatient): Patient => ({
     id: p.patient_id,
