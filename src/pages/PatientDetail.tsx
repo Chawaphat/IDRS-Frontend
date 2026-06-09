@@ -27,6 +27,7 @@ import { sectionNoteService } from '@/services/sectionNoteService';
 import type { DentalChart } from '@/services/types/dentalChart';
 import { useToastStore } from '@/store/toastStore';
 import MedicalHistoryForm from '@/components/chart/MedicalHistoryForm';
+import ExtraoralExamForm from '@/components/chart/ExtraoralExamForm';
 
 const MedicalIcon = ({ type, className }: { type: string; className?: string }) => {
     const base = "w-full h-16 sm:h-20 mb-2 rounded-lg border bg-slate-50 flex items-center justify-center p-2 transition-colors";
@@ -287,6 +288,7 @@ const VisualCard = ({ id, label, svgType, imagePath, isSelected, onClick, cardCl
 
 const SECTIONS = [
     { id: 'patientHistory', title: 'Patient History' },
+    { id: 'extraoral', title: 'Extraoral Exam' },
 ];
 
 interface Medication {
@@ -780,6 +782,14 @@ export default function SequentialPatientPage() {
                                     onEditPatient={() => navigate(`/patients/${patient.patient_id}`, { state: { openEditProfile: true } })}
                                 />
                             <SectionNotes sectionId="patientHistory" formData={formData} updateField={updateField} />
+                        </div>
+                    )}
+
+                    {/* 3. Extraoral Exam */}
+                    {activeSection === "extraoral" && chartId && (
+                        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+                            <ExtraoralExamForm chartId={chartId} />
+                            <SectionNotes sectionId="extraoral" formData={formData} updateField={updateField} />
                         </div>
                     )}
                 </main>

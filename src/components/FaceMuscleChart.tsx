@@ -56,7 +56,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
     return (
         <div className="flex flex-col gap-6">
             {/* Visualizations Panel (Top) */}
-            <div className="bg-slate-50/50 rounded-3xl border border-slate-100 p-4 sm:p-6 flex flex-col w-full max-w-5xl mx-auto">
+            <div className="flex flex-col w-full max-w-5xl mx-auto">
                 <div className="grid grid-cols-3 gap-4 sm:gap-8 w-full items-center">
                     {/* Right Side View (Flipped) */}
                     <div className="w-full flex flex-col">

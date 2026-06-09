@@ -2,6 +2,7 @@ import { dentalChartService } from './dentalChartService';
 import { dentalStatusService } from './dentalStatusService';
 import { medicalHistoryService } from './medicalHistoryService';
 import { sectionNoteService } from './sectionNoteService';
+import { extraoralExamService } from './extraoralExamService';
 
 export type { DentalChart, DentalChartCreatePayload } from './types/dentalChart';
 export type { DentalStatusBulkCreate, DentalStatusResponse, ToothData } from './types/dentalStatus';
@@ -14,6 +15,17 @@ export type {
   PatientExpectationsType,
 } from './types/medicalHistory';
 export type { SectionNote } from './types/sectionNote';
+export type {
+  ExtraoralExam,
+  ExtraoralExamCreate,
+  ExtraoralExamUpdate,
+  FacialSymmetryType,
+  FacialProfileType,
+  JointPainType,
+  JointSoundType,
+  JawDeviationType,
+  HabitType
+} from './types/extraoralExam';
 
 // Backwards-compatible facade while section-specific services are adopted.
 export const clinicalService = {
@@ -34,4 +46,9 @@ export const clinicalService = {
   getDentalStatus: dentalStatusService.getByChart,
   updateDentalStatus: dentalStatusService.update,
   deleteDentalStatus: dentalStatusService.delete,
+
+  getExtraoralExam: extraoralExamService.getByChart,
+  createExtraoralExam: extraoralExamService.create,
+  updateExtraoralExam: extraoralExamService.update,
+  deleteExtraoralExam: extraoralExamService.delete,
 };

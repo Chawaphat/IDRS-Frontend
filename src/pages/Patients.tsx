@@ -147,22 +147,24 @@ export default function PatientsPage() {
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center gap-5 hover:border-teal-200 transition-colors">
-            <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center shrink-0">
               <Users className="w-7 h-7 text-teal-600" />
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-500 mb-1">Total Patients</p>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-500 mb-0.5">Total Patients</p>
               <h3 className="text-3xl font-bold text-slate-900">{totalPatients}</h3>
+              <p className="text-[11px] font-medium text-slate-400 mt-1">All registered records</p>
             </div>
           </div>
           
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center gap-5 hover:border-indigo-200 transition-colors">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0">
               <Activity className="w-7 h-7 text-indigo-600" />
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-500 mb-1">Recent Visits</p>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-500 mb-0.5">Recent Visits</p>
               <h3 className="text-3xl font-bold text-slate-900">{recentVisitsThisMonth}</h3>
+              <p className="text-[11px] font-medium text-slate-400 mt-1">Active within 30 days</p>
             </div>
           </div>
 
@@ -171,12 +173,13 @@ export default function PatientsPage() {
             className="group bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl p-6 border border-transparent shadow-sm shadow-teal-500/20 hover:shadow-md hover:shadow-teal-500/40 flex items-center justify-between transition-all active:scale-[0.98]"
           >
             <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0 group-hover:scale-110 transition-transform">
                 <UserPlus className="w-7 h-7 text-white" />
               </div>
               <div className="text-left">
-                <p className="text-teal-50 text-sm font-medium mb-1">Action</p>
+                <p className="text-teal-50 text-sm font-medium mb-0.5">Action</p>
                 <h3 className="text-2xl font-bold text-white tracking-tight">New Patient</h3>
+                <p className="text-[11px] font-medium text-teal-100/80 mt-1">Create new record</p>
               </div>
             </div>
             <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">

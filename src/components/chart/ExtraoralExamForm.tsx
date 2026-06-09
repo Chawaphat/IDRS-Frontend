@@ -1,0 +1,453 @@
+import React, { useState, useEffect } from "react";
+import { Info, Activity, Zap, UserSquare2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { extraoralExamService } from "@/services/extraoralExamService";
+import type { 
+  ExtraoralExamUpdate, 
+  FacialSymmetryType, 
+  FacialProfileType, 
+  HabitType, 
+  JointSoundType, 
+  JawDeviationType, 
+  JointPainType 
+} from "@/services/types/extraoralExam";
+import { FacialProfile } from "@/components/FacialProfile";
+import { FacialSymmetry } from "@/components/FacialSymmetry";
+import { FaceMuscleChart } from "@/components/FaceMuscleChart";
+
+interface ExtraoralExamFormProps {
+  chartId: string;
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  
+  const [formData, setFormData] = useState<ExtraoralExamUpdate>({
+    facial_symmetry: "symmetry",
+    facial_profile: "straight",
+    muscle_pain: [],
+    joint_pain: [],
+    joint_sound: "no",
+    jaw_deviation: "none",
+    has_limited_opening: false,
+    mouth_opening_mm: null,
+    has_limited_movement: false,
+    specify_movement_detail: "",
+    parafunctional_habit: [],
+    parafunctional_habit_other: "",
+    factors_affecting_tooth_wear: {}
+  });
+
+  const debouncedData = useDebounce(formData, 1000);
+
+  useEffect(() => {
+    const fetchExam = async () => {
+      try {
+        setLoading(true);
+        const data = await extraoralExamService.getByChart(chartId);
+        if (data) {
+          setFormData({
+            ...data,
+            muscle_pain: data.muscle_pain || [],
+            joint_pain: data.joint_pain || [],
+            parafunctional_habit: data.parafunctional_habit || [],
+            factors_affecting_tooth_wear: data.factors_affecting_tooth_wear || {}
+          });
+        }
+        setInitialDataLoaded(true);
+      } catch (err) {
+        console.error("Failed to fetch extraoral exam:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchExam();
+  }, [chartId]);
+
+  useEffect(() => {
+    const saveData = async () => {
+      if (!initialDataLoaded) return;
+      try {
+        setSaving(true);
+        const payload: ExtraoralExamUpdate = { ...debouncedData };
+        try {
+          await extraoralExamService.update(chartId, payload);
+        } catch (updateErr: any) {
+          if (updateErr?.response?.status === 404) {
+            await extraoralExamService.create(chartId, payload as any);
+          } else {
+            throw updateErr;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save extraoral exam:", err);
+      } finally {
+        setSaving(false);
+      }
+    };
+    saveData();
+  }, [debouncedData, chartId, initialDataLoaded]);
+
+  const updateField = (field: keyof ExtraoralExamUpdate, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleArrayField = (field: keyof ExtraoralExamUpdate, value: string) => {
+    setFormData(prev => {
+      const arr = (prev[field] as string[]) || [];
+      if (arr.includes(value)) {
+        return { ...prev, [field]: arr.filter(item => item !== value) };
+      }
+      return { ...prev, [field]: [...arr, value] };
+    });
+  };
+
+  const handleToggleToothWear = (factor: string) => {
+    setFormData(prev => {
+      const current = prev.factors_affecting_tooth_wear || {};
+      return {
+        ...prev,
+        factors_affecting_tooth_wear: {
+          ...current,
+          [factor]: !current[factor]
+        }
+      };
+    });
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-500 animate-pulse">Loading Extraoral Examination...</div>;
+  }
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      <div className="border-b border-slate-200 pb-4 flex items-start justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
+              <UserSquare2 className="w-8 h-8 text-teal-600" />
+              Extraoral Examination
+          </h2>
+          <p className="text-slate-500 mt-1">Facial symmetry, TMJ, muscle pain, and habits assessment.</p>
+        </div>
+        {saving && <span className="text-sm text-slate-400 italic flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></div> Saving...</span>}
+      </div>
+
+      {/* 1. Facial Appearance */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
+            <Info className="w-5 h-5 text-indigo-500" />
+            <h3 className="font-semibold text-slate-800">Facial Appearance</h3>
+        </div>
+        <div className="p-6 flex flex-col gap-10">
+          <div className="space-y-3">
+            <FacialSymmetry 
+              value={formData.facial_symmetry as string} 
+              onChange={(val) => updateField('facial_symmetry', val as FacialSymmetryType)} 
+            />
+          </div>
+          <div className="space-y-3">
+            <FacialProfile 
+              value={formData.facial_profile as string} 
+              onChange={(val) => updateField('facial_profile', val as FacialProfileType)} 
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Muscles & TMJ Assessment */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-teal-500" />
+            <h3 className="font-semibold text-slate-800">Muscles & TMJ Assessment</h3>
+        </div>
+        <div className="p-6 space-y-10">
+          
+          <div className="space-y-4">
+            <Label className="text-sm font-bold text-slate-700 mb-4 block">Muscle Pain <span className="text-slate-400 font-normal ml-1">(Click on the face chart)</span></Label>
+            <FaceMuscleChart 
+              selectedMuscles={formData.muscle_pain as string[] || []}
+              onToggleMuscle={(id) => toggleArrayField('muscle_pain', id)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-8">
+            <div className="space-y-3">
+              <Label className="text-sm font-bold text-slate-700">Present Joint Pain</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'function', label: 'Function' },
+                  { value: 'palpation', label: 'Palpation' }
+                ].map(opt => (
+                  <div
+                    key={opt.value}
+                    onClick={() => toggleArrayField('joint_pain', opt.value)}
+                    className={cn(
+                      "px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center text-sm font-semibold select-none",
+                      (formData.joint_pain || []).includes(opt.value as JointPainType)
+                        ? "border-teal-500 bg-teal-50 text-teal-900 shadow-sm"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-bold text-slate-700">Jaw Deviation</Label>
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'None', value: 'none' }, 
+                    { label: 'Left', value: 'to_left' }, 
+                    { label: 'Right', value: 'to_right' }
+                  ].map(opt => (
+                    <div
+                      key={opt.value}
+                      onClick={() => {
+                        updateField('jaw_deviation', opt.value);
+                      }}
+                      className={cn(
+                        "px-3 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center text-sm font-semibold select-none whitespace-nowrap",
+                        formData.jaw_deviation === opt.value
+                          ? "border-teal-500 bg-teal-50 text-teal-900 shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      )}
+                    >
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 md:col-span-2">
+              <Label className="text-sm font-bold text-slate-700">Joint Sound</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { value: 'no', label: 'No' }, 
+                  { value: 'clicking', label: 'Clicking' }, 
+                  { value: 'crepitus', label: 'Crepitus' }, 
+                  { value: 'popping', label: 'Popping' }
+                ].map(opt => (
+                  <div
+                    key={opt.value}
+                    onClick={() => updateField('joint_sound', opt.value)}
+                    className={cn(
+                      "px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center text-sm font-semibold select-none",
+                      formData.joint_sound === opt.value
+                        ? "border-teal-500 bg-teal-50 text-teal-900 shadow-sm"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-8">
+            <div className="space-y-4">
+              <Label className="text-sm font-bold text-slate-700">Maximum Mouth Opening (mm)</Label>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Input
+                    type="number"
+                    value={formData.mouth_opening_mm || ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : null;
+                      updateField('mouth_opening_mm', val);
+                      updateField('has_limited_opening', val !== null && val < 35 && val > 0);
+                    }}
+                    className="w-full pr-10 border-slate-200"
+                    placeholder="e.g. 40"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-semibold">mm</span>
+                </div>
+                {Number(formData.mouth_opening_mm) > 0 && Number(formData.mouth_opening_mm) < 35 && (
+                  <span className="text-sm text-rose-500 font-semibold bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 shrink-0">Limited opening</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Label className="text-sm font-bold text-slate-700">Limited Border Movement?</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: false, label: 'No' },
+                  { value: true, label: 'Yes' }
+                ].map(opt => (
+                  <div
+                    key={opt.label}
+                    onClick={() => {
+                      updateField('has_limited_movement', opt.value);
+                      if (!opt.value) updateField('specify_movement_detail', '');
+                    }}
+                    className={cn(
+                      "px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center text-sm font-semibold select-none",
+                      formData.has_limited_movement === opt.value
+                        ? "border-teal-500 bg-teal-50 text-teal-900 shadow-sm"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
+
+              {formData.has_limited_movement && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300 pt-2">
+                  <Input
+                    value={formData.specify_movement_detail || ''}
+                    onChange={e => updateField('specify_movement_detail', e.target.value)}
+                    className="bg-white border-rose-200 focus-visible:ring-rose-500"
+                    placeholder="Specify details..."
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Habits & Factors Affecting Tooth Wear */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
+            <Zap className="w-5 h-5 text-amber-500" />
+            <h3 className="font-semibold text-slate-800">Habits & Factors Affecting Tooth Wear</h3>
+        </div>
+        <div className="p-6 space-y-8">
+          <div className="space-y-3">
+            <Label className="text-sm font-bold text-slate-700">Parafunctional Habit <span className="text-slate-400 font-normal ml-1">(Multi-select)</span></Label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { value: 'nail_biting', label: 'Nail Biting' },
+                { value: 'bruxism', label: 'Bruxism' },
+                { value: 'clenching', label: 'Clenching' },
+                { value: 'tongue_thrust', label: 'Tongue Thrust' },
+                { value: 'other', label: 'Other' }
+              ].map(opt => (
+                <div
+                  key={opt.value}
+                  onClick={() => {
+                    if (opt.value === 'other') {
+                      if (formData.parafunctional_habit_other !== null) {
+                        updateField('parafunctional_habit_other', null);
+                      } else {
+                        updateField('parafunctional_habit_other', '');
+                      }
+                    } else {
+                      toggleArrayField('parafunctional_habit', opt.value);
+                    }
+                  }}
+                  className={cn(
+                    "px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center text-sm font-semibold select-none",
+                    (opt.value === 'other' ? formData.parafunctional_habit_other !== null : (formData.parafunctional_habit || []).includes(opt.value as HabitType))
+                      ? "border-teal-500 bg-teal-50 text-teal-900 shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  )}
+                >
+                  {opt.label}
+                </div>
+              ))}
+            </div>
+
+            {formData.parafunctional_habit_other !== null && (
+              <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <Input
+                  value={formData.parafunctional_habit_other || ''}
+                  onChange={e => updateField('parafunctional_habit_other', e.target.value)}
+                  className="focus-visible:ring-amber-500 border-amber-200"
+                  placeholder="Specify other parafunctional habit..."
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3 border-t border-slate-100 pt-6">
+            <Label className="text-sm font-bold text-slate-700">Factors Affecting Tooth Wear <span className="text-slate-400 font-normal ml-1">(Multi-select)</span></Label>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {['Hard food', 'Acid Beverage', 'Bulimia', 'Swimming', 'GERD', 'Other'].map(opt => {
+                const isChecked = formData.factors_affecting_tooth_wear?.[opt] || false;
+                return (
+                  <div
+                    key={opt}
+                    onClick={() => handleToggleToothWear(opt)}
+                    className={cn(
+                      "px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center text-sm font-semibold select-none text-center",
+                      isChecked
+                        ? "border-teal-500 bg-teal-50 text-teal-900 shadow-sm"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                  >
+                    {opt}
+                  </div>
+                )
+              })}
+            </div>
+
+            {(formData.factors_affecting_tooth_wear?.['Hard food'] || formData.factors_affecting_tooth_wear?.['Other']) && (
+              <div className="pt-2 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                {formData.factors_affecting_tooth_wear?.['Hard food'] && (
+                  <Input
+                    value={formData.factors_affecting_tooth_wear?.['wearHardFoodDetail'] || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFormData(prev => ({
+                        ...prev,
+                        factors_affecting_tooth_wear: {
+                          ...(prev.factors_affecting_tooth_wear || {}),
+                          wearHardFoodDetail: val
+                        }
+                      }));
+                    }}
+                    className="focus-visible:ring-amber-500 border-amber-200"
+                    placeholder="Specify hard food type..."
+                    autoFocus
+                  />
+                )}
+                {formData.factors_affecting_tooth_wear?.['Other'] && (
+                  <Input
+                    value={formData.factors_affecting_tooth_wear?.['wearOtherDetail'] || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFormData(prev => ({
+                        ...prev,
+                        factors_affecting_tooth_wear: {
+                          ...(prev.factors_affecting_tooth_wear || {}),
+                          wearOtherDetail: val
+                        }
+                      }));
+                    }}
+                    className="focus-visible:ring-amber-500 border-amber-200"
+                    placeholder="Specify other tooth wear factors..."
+                    autoFocus
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
