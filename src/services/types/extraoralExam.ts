@@ -26,6 +26,7 @@ export interface ExtraoralExam {
   parafunctional_habit?: HabitType[] | null;
   parafunctional_habit_other?: string | null;
   factors_affecting_tooth_wear?: Record<string, any> | null;
+  note?: string | null;
 }
 
 export interface ExtraoralExamCreate {
@@ -42,6 +43,7 @@ export interface ExtraoralExamCreate {
   parafunctional_habit?: HabitType[] | null;
   parafunctional_habit_other?: string | null;
   factors_affecting_tooth_wear?: Record<string, any> | null;
+  note?: string | null;
 }
 
 export interface ExtraoralExamUpdate extends Partial<ExtraoralExamCreate> {}

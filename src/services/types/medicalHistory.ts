@@ -31,6 +31,7 @@ export interface MedicalHistory {
   previous_denture_count?: string | null;
   present_denture_age?: string | null;
   denture_complaint?: string | null;
+  note?: string | null;
   created_at?: string;
 }
 
@@ -53,6 +54,7 @@ export interface MedicalHistoryCreate {
   previous_denture_count?: string | null;
   present_denture_age?: string | null;
   denture_complaint?: string | null;
+  note?: string | null;
 }
 
 export interface MedicalHistoryUpdate extends Partial<MedicalHistoryCreate> {}

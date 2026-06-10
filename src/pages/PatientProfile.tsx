@@ -11,6 +11,7 @@ import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboa
 import { useToastStore } from '@/store/toastStore';
 import type { Patient } from './Patients';
 import { useAuthStore } from '@/store/authStore';
+import { useConfirmStore } from '@/store/confirmStore';
 
 const SIDEBAR_MENUS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -37,8 +38,7 @@ export default function PatientProfilePage() {
   const [loadingImages, setLoadingImages] = useState(false);
   const [isCreatingChart, setIsCreatingChart] = useState(false);
 
-  const [chartToDelete, setChartToDelete] = useState<DentalChart | null>(null);
-  const [isDeletingChart, setIsDeletingChart] = useState(false);
+  const askConfirm = useConfirmStore((state) => state.ask);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -151,23 +151,23 @@ export default function PatientProfilePage() {
 
   const confirmDeleteChart = (e: React.MouseEvent, chart: DentalChart) => {
     e.stopPropagation();
-    setChartToDelete(chart);
-  };
-
-  const executeDeleteChart = async () => {
-    if (!chartToDelete) return;
-    try {
-      setIsDeletingChart(true);
-      await dentalChartService.delete(chartToDelete.chart_id); // SRS-60
-      setCharts(prev => prev.filter(c => c.chart_id !== chartToDelete.chart_id)); // SRS-61
-      showToast("Dental chart deleted successfully", "success"); // SRS-62
-    } catch (err) {
-      console.error("Failed to delete dental chart", err);
-      showToast("Cannot connect to the database. Failed to delete dental chart.", "error"); // SRS-63
-    } finally {
-      setIsDeletingChart(false);
-      setChartToDelete(null);
-    }
+    askConfirm({
+      title: "Delete Dental Chart",
+      message: `Are you sure you want to delete the clinical chart created on ${new Date(chart.created_at).toLocaleDateString()} at ${new Date(chart.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}? All associated records will be permanently removed.`,
+      confirmText: "Delete Chart",
+      cancelText: "Cancel",
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          await dentalChartService.delete(chart.chart_id); // SRS-60
+          setCharts(prev => prev.filter(c => c.chart_id !== chart.chart_id)); // SRS-61
+          showToast("Dental chart deleted successfully", "success"); // SRS-62
+        } catch (err) {
+          console.error("Failed to delete dental chart", err);
+          showToast("Cannot connect to the database. Failed to delete dental chart.", "error"); // SRS-63
+        }
+      }
+    });
   };
 
   const refreshChartsList = async () => {
@@ -979,62 +979,6 @@ export default function PatientProfilePage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Chart Confirmation Modal (SRS-59) */}
-      {chartToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
-            onClick={() => !isDeletingChart && setChartToDelete(null)}
-          />
-          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6 text-rose-500" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800">Delete Dental Chart</h3>
-                <p className="text-sm text-slate-500 mt-1">This action cannot be undone.</p>
-              </div>
-            </div>
-            
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 mt-2">
-              <p className="text-sm text-slate-600">
-                Are you sure you want to delete the clinical chart created on <strong>{new Date(chartToDelete.created_at).toLocaleDateString()}</strong> at <strong>{new Date(chartToDelete.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>?
-              </p>
-              <p className="text-sm text-slate-600 mt-2 font-medium">
-                All associated records, diagnoses, and notes will be permanently removed.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setChartToDelete(null)}
-                disabled={isDeletingChart}
-                className="h-11 px-5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeDeleteChart}
-                disabled={isDeletingChart}
-                className="h-11 px-6 rounded-xl font-semibold text-sm bg-rose-500 hover:bg-rose-600 text-white shadow-md shadow-rose-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isDeletingChart ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Deleting...
-                  </>
-                ) : (
-                  "Delete Chart"
-                )}
-              </button>
-            </div>
           </div>
         </div>
       )}

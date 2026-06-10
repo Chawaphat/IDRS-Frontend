@@ -2,14 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import { FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { sectionNames } from '../types';
-import type { FormState } from '../types';
+export interface SectionNotesProps {
+    sectionId: string;
+    value: string;
+    onChange: (value: string) => void;
+}
 
-export const SectionNotes = ({ sectionId, formData, updateField }: { sectionId: string, formData: FormState, updateField: (k: keyof FormState, v: unknown) => void }) => {
+export const SectionNotes = ({ sectionId, value, onChange }: SectionNotesProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const [showAttention, setShowAttention] = useState(true);
     const popoverRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const value = formData.sectionNotes?.[sectionId] || '';
     const sectionName = sectionNames[sectionId] || 'Section';
 
     useEffect(() => {
@@ -134,7 +137,7 @@ export const SectionNotes = ({ sectionId, formData, updateField }: { sectionId: 
                     <textarea
                         ref={textareaRef}
                         value={value}
-                        onChange={(e) => updateField('sectionNotes', { ...formData.sectionNotes, [sectionId]: e.target.value })}
+                        onChange={(e) => onChange(e.target.value)}
                         placeholder={`Type additional clinical notes for ${sectionName.toLowerCase()}...`}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-300 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 min-h-[140px] resize-y shadow-inner"
                     />
@@ -144,7 +147,7 @@ export const SectionNotes = ({ sectionId, formData, updateField }: { sectionId: 
                             <button
                                 type="button"
                                 onClick={() => {
-                                    updateField('sectionNotes', { ...formData.sectionNotes, [sectionId]: '' });
+                                    onChange('');
                                     setIsOpen(false);
                                 }}
                                 className="text-rose-500 hover:text-rose-600 hover:underline font-semibold"

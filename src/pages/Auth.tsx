@@ -346,12 +346,12 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
             <Stethoscope className="h-6 w-6 text-white" />
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+            {mode === 'login' ? 'Login' : 'Create Account'}
           </h2>
           <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mt-1 block">IDRS Dental System</span>
           <p className="text-xs text-slate-500 mt-4 leading-relaxed max-w-xs">
             {mode === 'login' 
-              ? 'Welcome back. Sign in with your credentials to access patient charting and AI diagnostics support.' 
+              ? 'Welcome back. Log in with your credentials to access patient charting and AI diagnostics support.' 
               : 'Register your clinic workspace to start digitized patient files, 2D charting, and instant reports.'}
           </p>
         </div>
@@ -474,7 +474,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
                 <path fill="#FBBC05" d="M5.25 14.26a7.2 7.2 0 010-4.52V6.63H2.82a12 12 0 000 10.74l2.43-3.1z" />
                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.43-3.43A12 12 0 002.82 6.63L5.25 9.74c.95-2.85 3.61-4.99 6.75-4.99z" />
               </svg>
-              Sign in with Google
+              Login with Google
             </button>
 
           </form>

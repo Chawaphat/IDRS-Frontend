@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,20 +25,23 @@ import { FacialProfile } from '@/components/FacialProfile';
 
 import { patientService, type BackendPatient, type ImageManagement } from '@/services/patientService';
 import { dentalChartService } from '@/services/dentalChartService';
-import { sectionNoteService } from '@/services/sectionNoteService';
+import { estheticEvaluationService } from '@/services/estheticEvaluationService';
 import type { DentalChart } from '@/services/types/dentalChart';
 import { useToastStore } from '@/store/toastStore';
 import MedicalHistoryForm from '@/components/chart/MedicalHistoryForm';
 import ExtraoralExamForm from '@/components/chart/ExtraoralExamForm';
-import { SectionNotes } from '@/components/chart/components/SectionNotes';
+import EstheticEvaluation from '@/components/chart/EstheticEvaluation';
+import VdoEvaluationForm from '@/components/chart/VdoEvaluationForm';
 import { DEFAULT_STATE, sectionNames } from '@/components/chart/types';
 import type { FormState } from '@/components/chart/types';
 
-// Extracted UI Components and SectionNotes are now in src/components/chart/components
+// Extracted UI Components are now in src/components/chart/components
 
 const SECTIONS = [
     { id: 'patientHistory', title: 'Patient History' },
     { id: 'extraoral', title: 'Extraoral Exam' },
+    { id: 'esthetic', title: 'Esthetic Evaluation' },
+    { id: 'vdo', title: 'VDO Evaluation' },
 ];
 
 // Types and DEFAULT_STATE extracted to src/components/chart/types.ts
@@ -60,7 +63,6 @@ export default function SequentialPatientPage() {
     const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
 
     const [formData, setFormData] = useState<FormState>(DEFAULT_STATE);
-    const [sectionNotesLoaded, setSectionNotesLoaded] = useState(false);
     const [medFormInput, setMedFormInput] = useState({
         name: '',
         dose: '',
@@ -90,22 +92,10 @@ export default function SequentialPatientPage() {
                 const chartData = await dentalChartService.getById(chartId);
                 setChart(chartData);
 
-                // 3. Fetch free notes attached to each chart section
-                setSectionNotesLoaded(false);
-                try {
-                    const sectionNotes = await sectionNoteService.getByChart(chartId);
-                    setFormData(prev => ({
-                        ...prev,
-                        sectionNotes: sectionNotes.reduce<Record<string, string>>((acc, note) => {
-                            acc[note.section_id] = note.content || '';
-                            return acc;
-                        }, {})
-                    }));
-                } catch (noteErr) {
-                    console.error("Failed to fetch section notes", noteErr);
-                } finally {
-                    setSectionNotesLoaded(true);
-                }
+                // 3. Removed: section notes are now fetched by their respective components.
+
+                // 3.5 Fetch Esthetic Evaluation
+                // Removed: EstheticEvaluation now handles its own state and fetch.
 
                 // 4. Fetch associated radiography images
                 try {
@@ -132,20 +122,7 @@ export default function SequentialPatientPage() {
         fetchChartDetails();
     }, [chartId, patientId, showToast]);
 
-    useEffect(() => {
-        if (!chartId || !sectionNotesLoaded) return;
-
-        const timeoutId = window.setTimeout(() => {
-            Object.entries(formData.sectionNotes).forEach(([sectionId, content]) => {
-                sectionNoteService.upsert(chartId, sectionId, content).catch((err) => {
-                    console.error(`Failed to save ${sectionId} note`, err);
-                    showToast(`Failed to save ${sectionNames[sectionId] || 'section'} note.`, 'error');
-                });
-            });
-        }, 700);
-
-        return () => window.clearTimeout(timeoutId);
-    }, [chartId, formData.sectionNotes, sectionNotesLoaded, showToast]);
+    // sectionNotes saving logic removed - handled by individual components
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateField = (field: keyof FormState, value: any) => {
@@ -164,7 +141,7 @@ export default function SequentialPatientPage() {
 
     const isVdoLost = Number(formData.vdoFreewaySpaceMm) > 4;
 
-    const handleSave = () => {
+    const handleSave = async () => {
         showToast('Clinical charting session completed and saved.', 'success');
         navigate(`/patients/${patientId}`);
     };
@@ -282,17 +259,50 @@ export default function SequentialPatientPage() {
                                 patient={patient}
                                 onEditPatient={() => navigate(`/patients/${patient.patient_id}`, { state: { openEditProfile: true } })}
                             />
-                            <SectionNotes sectionId="patientHistory" formData={formData} updateField={updateField} />
                         </div>
                     )}
 
-                    {/* 3. Extraoral Exam */}
+                    {/* 3. Extraoral Exam Form */}
                     {chartId && (
                         <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === "extraoral" ? "block" : "hidden")}>
                             <ExtraoralExamForm chartId={chartId} />
-                            <SectionNotes sectionId="extraoral" formData={formData} updateField={updateField} />
                         </div>
                     )}
+
+                    {/* 4. Esthetic Evaluation */}
+                    {chartId && (
+                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === 'esthetic' ? "block" : "hidden")}>
+                            <EstheticEvaluation chartId={chartId} />
+                        </div>
+                    )}
+
+                    {/* 5. VDO Evaluation */}
+                    {chartId && (
+                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === 'vdo' ? "block" : "hidden")}>
+                            <VdoEvaluationForm chartId={chartId} />
+                        </div>
+                    )}
+
+                    {/* Next Section Button */}
+                    {chartId && (() => {
+                        const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
+                        if (currentIndex === -1 || currentIndex === SECTIONS.length - 1) return null;
+                        const nextSection = SECTIONS[currentIndex + 1];
+                        return (
+                            <div className="max-w-4xl mx-auto mt-4 border-t border-slate-200 pt-6 flex justify-end pb-12">
+                                <Button 
+                                    onClick={() => {
+                                        setActiveSection(nextSection.id as any);
+                                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-6 py-5 flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02]"
+                                >
+                                    Next: {nextSection.title}
+                                    <ArrowRight className="w-5 h-5 ml-1" />
+                                </Button>
+                            </div>
+                        );
+                    })()}
                 </main>
             </div>
 

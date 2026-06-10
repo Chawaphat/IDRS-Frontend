@@ -16,6 +16,7 @@ import type {
 import { FacialProfile } from "@/components/FacialProfile";
 import { FacialSymmetry } from "@/components/FacialSymmetry";
 import { FaceMuscleChart } from "@/components/FaceMuscleChart";
+import { SectionNotes } from "./components/SectionNotes";
 
 interface ExtraoralExamFormProps {
   chartId: string;
@@ -50,7 +51,8 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
     specify_movement_detail: "",
     parafunctional_habit: [],
     parafunctional_habit_other: "",
-    factors_affecting_tooth_wear: {}
+    factors_affecting_tooth_wear: {},
+    note: ""
   });
 
   const debouncedData = useDebounce(formData, 1000);
@@ -66,7 +68,8 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
             muscle_pain: data.muscle_pain || [],
             joint_pain: data.joint_pain || [],
             parafunctional_habit: data.parafunctional_habit || [],
-            factors_affecting_tooth_wear: data.factors_affecting_tooth_wear || {}
+            factors_affecting_tooth_wear: data.factors_affecting_tooth_wear || {},
+            note: data.note || ""
           });
         }
         setInitialDataLoaded(true);
@@ -471,6 +474,12 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
           </div>
         </div>
       </div>
+
+      <SectionNotes 
+        sectionId="extraoral" 
+        value={formData.note || ""} 
+        onChange={(val) => updateField("note", val)} 
+      />
     </div>
   );
 }

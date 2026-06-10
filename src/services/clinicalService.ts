@@ -1,8 +1,9 @@
 import { dentalChartService } from './dentalChartService';
 import { dentalStatusService } from './dentalStatusService';
 import { medicalHistoryService } from './medicalHistoryService';
-import { sectionNoteService } from './sectionNoteService';
 import { extraoralExamService } from './extraoralExamService';
+import { estheticEvaluationService } from './estheticEvaluationService';
+import { vdoEvaluationService } from './vdoEvaluationService';
 
 export type { DentalChart, DentalChartCreatePayload } from './types/dentalChart';
 export type { DentalStatusBulkCreate, DentalStatusResponse, ToothData } from './types/dentalStatus';
@@ -14,7 +15,6 @@ export type {
   Medication,
   PatientExpectationsType,
 } from './types/medicalHistory';
-export type { SectionNote } from './types/sectionNote';
 export type {
   ExtraoralExam,
   ExtraoralExamCreate,
@@ -26,6 +26,13 @@ export type {
   JawDeviationType,
   HabitType
 } from './types/extraoralExam';
+export type {
+  VdoEvaluation,
+  VdoEvaluationCreate,
+  VdoEvaluationUpdate,
+  BiteType,
+  FacialConditionType
+} from './types/vdoEvaluation';
 
 // Backwards-compatible facade while section-specific services are adopted.
 export const clinicalService = {
@@ -33,10 +40,6 @@ export const clinicalService = {
   getDentalChartById: dentalChartService.getById,
   createDentalChart: dentalChartService.create,
   deleteDentalChart: dentalChartService.delete,
-
-  getSectionNotes: sectionNoteService.getByChart,
-  upsertSectionNote: sectionNoteService.upsert,
-  deleteSectionNote: sectionNoteService.delete,
 
   getMedicalHistory: medicalHistoryService.getByChart,
   createMedicalHistory: medicalHistoryService.create,
@@ -51,4 +54,14 @@ export const clinicalService = {
   createExtraoralExam: extraoralExamService.create,
   updateExtraoralExam: extraoralExamService.update,
   deleteExtraoralExam: extraoralExamService.delete,
+
+  getEstheticEvaluation: estheticEvaluationService.get,
+  createEstheticEvaluation: (chartId: string, payload: any) => estheticEvaluationService.upsert(chartId, payload),
+  updateEstheticEvaluation: (chartId: string, payload: any) => estheticEvaluationService.upsert(chartId, payload),
+  deleteEstheticEvaluation: estheticEvaluationService.delete,
+
+  getVdoEvaluation: vdoEvaluationService.getByChart,
+  createVdoEvaluation: vdoEvaluationService.create,
+  updateVdoEvaluation: vdoEvaluationService.update,
+  deleteVdoEvaluation: vdoEvaluationService.delete,
 };

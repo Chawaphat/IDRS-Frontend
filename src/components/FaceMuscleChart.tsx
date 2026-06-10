@@ -82,7 +82,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                 top: muscle.top,
                                                 width: muscle.width,
                                                 height: muscle.height,
-                                                filter: active ? 'drop-shadow(0 0 4px rgba(239,68,68,0.8)) drop-shadow(0 0 12px rgba(220,38,38,0.4))' : 'none'
+                                                filter: active ? 'drop-shadow(0 0 2px rgba(239,68,68,0.5))' : 'none'
                                             }}
                                             title={`Right ${muscle.id}`}
                                         >
@@ -105,7 +105,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                 <div 
                                                     className={cn("w-full h-full", !active && "bg-red-500")}
                                                     style={active ? {
-                                                        background: 'radial-gradient(ellipse at center, rgba(254,226,226,0.9) 0%, rgba(239,68,68,0.9) 35%, rgba(185,28,28,0.85) 70%, rgba(127,29,29,0.8) 100%)'
+                                                        background: 'rgba(239,68,68,0.7)'
                                                     } : {}}
                                                 />
                                             </div>
@@ -140,7 +140,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                             top: muscle.top,
                                             width: muscle.width,
                                             height: muscle.height,
-                                            filter: active ? 'drop-shadow(0 0 4px rgba(239,68,68,0.8)) drop-shadow(0 0 12px rgba(220,38,38,0.4))' : 'none'
+                                            filter: active ? 'drop-shadow(0 0 2px rgba(239,68,68,0.5))' : 'none'
                                         }}
                                         title={muscle.id}
                                     >
@@ -163,7 +163,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                             <div 
                                                 className={cn("w-full h-full", !active && "bg-red-500")}
                                                 style={active ? {
-                                                    background: 'radial-gradient(ellipse at center, rgba(254,226,226,0.9) 0%, rgba(239,68,68,0.9) 35%, rgba(185,28,28,0.85) 70%, rgba(127,29,29,0.8) 100%)'
+                                                    background: 'rgba(239,68,68,0.7)'
                                                 } : {}}
                                             />
                                         </div>
@@ -198,7 +198,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                 top: muscle.top,
                                                 width: muscle.width,
                                                 height: muscle.height,
-                                                filter: active ? 'drop-shadow(0 0 4px rgba(239,68,68,0.8)) drop-shadow(0 0 12px rgba(220,38,38,0.4))' : 'none'
+                                                filter: active ? 'drop-shadow(0 0 2px rgba(239,68,68,0.5))' : 'none'
                                             }}
                                             title={`Left ${muscle.id}`}
                                         >
@@ -221,7 +221,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                 <div 
                                                     className={cn("w-full h-full", !active && "bg-red-500")}
                                                     style={active ? {
-                                                        background: 'radial-gradient(ellipse at center, rgba(254,226,226,0.9) 0%, rgba(239,68,68,0.9) 35%, rgba(185,28,28,0.85) 70%, rgba(127,29,29,0.8) 100%)'
+                                                        background: 'rgba(239,68,68,0.7)'
                                                     } : {}}
                                                 />
                                             </div>

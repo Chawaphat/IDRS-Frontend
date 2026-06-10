@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { medicalHistoryService } from "@/services/medicalHistoryService";
 import type { MedicalHistoryUpdate, AllergyStatusType, PatientExpectationsType, Medication } from "@/services/types/medicalHistory";
 import { useToastStore } from "@/store/toastStore";
+import { SectionNotes } from "./components/SectionNotes";
 
 interface MedicalHistoryFormProps {
   chartId: string;
@@ -56,7 +57,8 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
     edentulous_time: "",
     previous_denture_count: "",
     present_denture_age: "",
-    denture_complaint: ""
+    denture_complaint: "",
+    note: ""
   });
   
   const [hasMedications, setHasMedications] = useState<boolean | null>(null);
@@ -88,7 +90,8 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
             edentulous_time: data.edentulous_time || "",
             previous_denture_count: data.previous_denture_count || "",
             present_denture_age: data.present_denture_age || "",
-            denture_complaint: data.denture_complaint || ""
+            denture_complaint: data.denture_complaint || "",
+            note: data.note || ""
           });
           if (data.current_medication && data.current_medication.length > 0) {
             setHasMedications(true);
@@ -600,6 +603,11 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
               </div>
           </div>
       </div>
+      <SectionNotes 
+        sectionId="patientHistory" 
+        value={formData.note || ""} 
+        onChange={(val) => updateField("note", val)} 
+      />
     </div>
   );
 }
