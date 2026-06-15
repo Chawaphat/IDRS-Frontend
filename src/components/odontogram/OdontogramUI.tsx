@@ -193,29 +193,18 @@ export default function OdontogramUI({
             <div className="mt-auto flex w-full flex-col gap-3 border-t border-slate-100 bg-slate-50/50 p-5">
               <div className="flex items-center justify-between">
                 <p className="text-[13px] font-bold uppercase tracking-wide text-slate-700">Image References</p>
-                <button className="rounded-md bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-600 transition-colors hover:bg-teal-100">
-                  View All Images
-                </button>
               </div>
               <div className="flex h-[180px] flex-row gap-4">
                 <div className="flex flex-1 flex-col gap-1.5">
                   <p className="text-xs font-semibold text-slate-500">Intraoral</p>
-                  <div className="group relative h-full w-full cursor-zoom-in">
-                    <img
-                      src="/intraoral.png"
-                      alt="Intraoral Reference"
-                      className="absolute inset-0 z-10 h-full w-full origin-bottom-left rounded-xl border border-slate-200 object-cover shadow-sm transition-all duration-300 group-hover:z-50 group-hover:scale-[1.5] group-hover:shadow-2xl"
-                    />
+                  <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100 text-xs font-medium text-slate-400">
+                    Coming soon
                   </div>
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
                   <p className="text-xs font-semibold text-slate-500">Panoramic X-Ray</p>
-                  <div className="group relative h-full w-full cursor-zoom-in">
-                    <img
-                      src="/Paronamic.png"
-                      alt="Panoramic X-Ray Reference"
-                      className="absolute inset-0 z-10 h-full w-full origin-bottom-right rounded-xl border border-slate-200 object-cover shadow-sm transition-all duration-300 group-hover:z-50 group-hover:scale-[1.5] group-hover:shadow-2xl"
-                    />
+                  <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100 text-xs font-medium text-slate-400">
+                    Coming soon
                   </div>
                 </div>
               </div>

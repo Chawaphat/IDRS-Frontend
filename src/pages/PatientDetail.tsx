@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSectionSaveStore } from '@/store/sectionSaveStore';
+import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +18,6 @@ import { format, parseISO } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-import OdontogramUI from '@/components/odontogram/OdontogramUI';
 import OcclusalAnalysis from '@/components/OcclusalAnalysis';
 import { FaceMuscleChart } from '@/components/FaceMuscleChart';
 import { RankedExpectationSelector } from '@/components/RankedExpectationSelector';
@@ -32,6 +33,8 @@ import MedicalHistoryForm from '@/components/chart/MedicalHistoryForm';
 import ExtraoralExamForm from '@/components/chart/ExtraoralExamForm';
 import EstheticEvaluation from '@/components/chart/EstheticEvaluation';
 import VdoEvaluationForm from '@/components/chart/VdoEvaluationForm';
+import DentalStatusForm from '@/components/chart/DentalStatusForm';
+import ResidualRidgeAssessmentForm from '@/components/chart/ResidualRidgeAssessmentForm';
 import { DEFAULT_STATE, sectionNames } from '@/components/chart/types';
 import type { FormState } from '@/components/chart/types';
 
@@ -42,6 +45,9 @@ const SECTIONS = [
     { id: 'extraoral', title: 'Extraoral Exam' },
     { id: 'esthetic', title: 'Esthetic Evaluation' },
     { id: 'vdo', title: 'VDO Evaluation' },
+    { id: 'dentalStatus', title: 'Dental Status' },
+    { id: 'occlusal', title: 'Occlusal Analysis' },
+    { id: 'residualRidge', title: 'Residual Ridge Area' },
 ];
 
 // Types and DEFAULT_STATE extracted to src/components/chart/types.ts
@@ -60,6 +66,49 @@ export default function SequentialPatientPage() {
 
     const [activeSection, setActiveSection] = useState<string>('patientHistory');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const { sections: sectionSaveMap } = useSectionSaveStore();
+
+    const [pendingNavPath, setPendingNavPath] = useState<string | null>(null);
+    const [showNavBlockDialog, setShowNavBlockDialog] = useState(false);
+
+    const handleSectionChange = useCallback(async (newSectionId: string) => {
+        if (newSectionId === activeSection) return;
+        const current = sectionSaveMap[activeSection];
+        if (current?.isDirty) {
+            try {
+                await current.save();
+            } catch {
+                showToast('Failed to save changes. Please check your connection and try again.', 'error');
+                return;
+            }
+        }
+        setActiveSection(newSectionId);
+        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [activeSection, sectionSaveMap, showToast]);
+
+    // Guard for navigating away from the page (back button, save record, etc.)
+    const navigateWithGuard = useCallback((path: string) => {
+        const hasDirty = Object.values(sectionSaveMap).some(s => s.isDirty);
+        if (hasDirty) {
+            setPendingNavPath(path);
+            setShowNavBlockDialog(true);
+            return;
+        }
+        navigate(path);
+    }, [sectionSaveMap, navigate]);
+
+    // Browser tab close guard
+    useEffect(() => {
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            const hasDirty = Object.values(sectionSaveMap).some(s => s.isDirty);
+            if (hasDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', onBeforeUnload);
+        return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, [sectionSaveMap]);
     const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
 
     const [formData, setFormData] = useState<FormState>(DEFAULT_STATE);
@@ -142,9 +191,20 @@ export default function SequentialPatientPage() {
     const isVdoLost = Number(formData.vdoFreewaySpaceMm) > 4;
 
     const handleSave = async () => {
+        const dirtySections = Object.values(sectionSaveMap).filter(s => s.isDirty);
+        if (dirtySections.length > 0) {
+            try {
+                await Promise.all(dirtySections.map(s => s.save()));
+            } catch {
+                showToast('Failed to save changes. Please check your connection and try again.', 'error');
+                return;
+            }
+        }
         showToast('Clinical charting session completed and saved.', 'success');
         navigate(`/patients/${patientId}`);
     };
+
+    const backPath = `/patients/${patientId}`;
 
     if (loading) {
         return (
@@ -180,7 +240,7 @@ export default function SequentialPatientPage() {
             {/* Top Header */}
             <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 shadow-sm z-10 relative">
                 <div className="flex items-center gap-4 border-slate-200 pr-4">
-                    <Button variant="ghost" className="p-2 h-auto text-slate-500 hover:bg-slate-100 rounded-full" onClick={() => navigate(`/patients/${patient.patient_id}`)}>
+                    <Button variant="ghost" className="p-2 h-auto text-slate-500 hover:bg-slate-100 rounded-full" onClick={() => navigateWithGuard(backPath)}>
                         <ArrowLeft className="w-5 h-5" />
                     </Button>
                     <div className="flex flex-col">
@@ -223,7 +283,7 @@ export default function SequentialPatientPage() {
                             return (
                                 <button
                                     key={sec.id}
-                                    onClick={() => setActiveSection(sec.id)}
+                                    onClick={() => handleSectionChange(sec.id)}
                                     className={cn(
                                         "w-full flex items-center px-3 py-3 rounded-xl text-left text-sm font-medium transition-all group",
                                         isSidebarOpen ? "justify-between" : "justify-center",
@@ -241,6 +301,9 @@ export default function SequentialPatientPage() {
                                             {idx + 1}
                                         </span>
                                         {isSidebarOpen && <span className="truncate">{sec.title}</span>}
+                                        {sectionSaveMap[sec.id]?.isDirty && (
+                                            <span className="ml-1 h-2 w-2 shrink-0 rounded-full bg-amber-400" title="Unsaved changes" />
+                                        )}
                                     </span>
                                     {isSidebarOpen && isActive && <ChevronRight className="w-4 h-4 shrink-0" />}
                                 </button>
@@ -283,6 +346,27 @@ export default function SequentialPatientPage() {
                         </div>
                     )}
 
+                    {/* 6. Dental Status */}
+                    {chartId && (
+                        <div className={cn("h-full w-full max-w-none", activeSection === 'dentalStatus' ? "block" : "hidden")}>
+                            <DentalStatusForm chartId={chartId} />
+                        </div>
+                    )}
+
+                    {/* 7. Occlusal Analysis */}
+                    {chartId && (
+                        <div className={cn("w-full max-w-none", activeSection === 'occlusal' ? "block" : "hidden")}>
+                            <OcclusalAnalysis chartId={chartId} />
+                        </div>
+                    )}
+
+                    {/* 8. Residual Ridge Area */}
+                    {chartId && (
+                        <div className={cn("w-full max-w-none", activeSection === 'residualRidge' ? "block" : "hidden")}>
+                            <ResidualRidgeAssessmentForm chartId={chartId} />
+                        </div>
+                    )}
+
                     {/* Next Section Button */}
                     {chartId && (() => {
                         const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
@@ -291,10 +375,7 @@ export default function SequentialPatientPage() {
                         return (
                             <div className="max-w-4xl mx-auto mt-4 border-t border-slate-200 pt-6 flex justify-end pb-12">
                                 <Button 
-                                    onClick={() => {
-                                        setActiveSection(nextSection.id as any);
-                                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
-                                    }}
+                                    onClick={() => handleSectionChange(nextSection.id)}
                                     className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-6 py-5 flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02]"
                                 >
                                     Next: {nextSection.title}
@@ -305,6 +386,29 @@ export default function SequentialPatientPage() {
                     })()}
                 </main>
             </div>
+
+            {/* Unsaved changes dialog — navigating away from page */}
+            <UnsavedChangesDialog
+                open={showNavBlockDialog}
+                sectionName="All unsaved sections"
+                onSave={async () => {
+                    const saves = Object.values(sectionSaveMap)
+                        .filter(s => s.isDirty)
+                        .map(s => s.save());
+                    await Promise.all(saves);
+                    setShowNavBlockDialog(false);
+                    if (pendingNavPath) navigate(pendingNavPath);
+                }}
+                onDiscard={() => {
+                    setShowNavBlockDialog(false);
+                    if (pendingNavPath) navigate(pendingNavPath);
+                    setPendingNavPath(null);
+                }}
+                onCancel={() => {
+                    setShowNavBlockDialog(false);
+                    setPendingNavPath(null);
+                }}
+            />
 
             {selectedImageUrl && (
                 <div className="fixed inset-0 z-50 bg-slate-900/95 flex items-center justify-center p-4 sm:p-8 backdrop-blur-md animate-in zoom-in-95 duration-200">

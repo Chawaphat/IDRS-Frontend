@@ -2,9 +2,14 @@ import api from '@/lib/api';
 import type { VdoEvaluation, VdoEvaluationCreate, VdoEvaluationUpdate } from './types/vdoEvaluation';
 
 export const vdoEvaluationService = {
-  getByChart: async (chartId: string): Promise<VdoEvaluation> => {
-    const response = await api.get<VdoEvaluation>(`/dental-charts/${chartId}/vdo-evaluation`);
-    return response.data;
+  getByChart: async (chartId: string): Promise<VdoEvaluation | null> => {
+    try {
+      const response = await api.get<VdoEvaluation>(`/dental-charts/${chartId}/vdo-evaluation`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      throw error;
+    }
   },
 
   create: async (chartId: string, payload: VdoEvaluationCreate): Promise<VdoEvaluation> => {
@@ -12,11 +17,13 @@ export const vdoEvaluationService = {
     return response.data;
   },
 
+  // PUT now returns the saved record. Kept loosely typed because callers only
+  // await it to confirm success — they re-read state from their own form, not the response.
   update: async (
     chartId: string,
     payload: VdoEvaluationUpdate,
-  ): Promise<{ vdo_id: string; chart_id: string } & Partial<VdoEvaluation>> => {
-    const response = await api.put<{ vdo_id: string; chart_id: string } & Partial<VdoEvaluation>>(
+  ): Promise<VdoEvaluation> => {
+    const response = await api.put<VdoEvaluation>(
       `/dental-charts/${chartId}/vdo-evaluation`,
       payload,
     );

@@ -118,7 +118,7 @@ type Any = any;
 export type CariesDepth = "none" | "enamel" | "dentine" | "pulp";
 export type EptResult = "none" | "positive" | "negative";
 export type RootCanalStatus = "no-endo" | "medicated" | "incomplete" | "completed";
-export type RestorationType = "none" | "crown" | "bridge" | "veneer" | "onlay" | "vonlay";
+export type RestorationType = "none" | "crown" | "bridge" | "veneer" | "onlay" | "vonlay" | "overlay";
 export type RestorationMaterial = "none" | "zircon" | "emax" | "metal" | "pfm" | "pfz";
 export type ImplantComponent = "none" | "cover-screw" | "healing-abutment" | "crown" | "bridge";
 export type ImplantRetentionType = "none" | "screw" | "cement";
@@ -352,6 +352,18 @@ export interface OdontogramSnapshot {
   activeLabel: string;
   selectedTeeth: number[];
   state: ToothState | null;
+}
+
+export interface OdontogramStatusSnapshot {
+  version: string;
+  globals: {
+    wisdomVisible: boolean;
+    showBase: boolean;
+    occlusalVisible: boolean;
+    showHealthyPulp: boolean;
+    edentulous: boolean;
+  };
+  teeth: Record<number, Record<string, any>>;
 }
 
 type OdontogramListener = (snapshot: OdontogramSnapshot) => void;
@@ -1631,6 +1643,25 @@ function serializeState(s: Any) {
   };
 }
 
+export function getOdontogramStatusSnapshot(): OdontogramStatusSnapshot {
+  const teeth = {} as Record<number, Record<string, any>>;
+  for (const toothNo of ALL_TEETH) {
+    const s = toothState.get(toothNo) ?? defaultState();
+    teeth[toothNo] = serializeState(s);
+  }
+  return {
+    version: "1.2",
+    globals: {
+      wisdomVisible,
+      showBase,
+      occlusalVisible,
+      showHealthyPulp,
+      edentulous,
+    },
+    teeth,
+  };
+}
+
 // Allowed values for imported state fields
 const VALID_TOOTH_SELECTION = new Set(["none", "tooth-base", "milktooth", "implant", "tooth-crownprep", "tooth-under-gum", "no-tooth-after-extraction"]);
 const VALID_ENDO = new Set(["none", "endo-medical-filling", "endo-filling", "endo-filling-incomplete", "endo-glass-pin", "endo-metal-pin"]);
@@ -1641,7 +1672,7 @@ const VALID_CROWN_MATERIAL = new Set(["natural", "broken", "radix", "emax", "zir
 const VALID_CARIES_DEPTH = new Set(["none", "enamel", "dentine", "pulp"]);
 const VALID_EPT_RESULT = new Set(["none", "positive", "negative"]);
 const VALID_ROOT_CANAL = new Set(["no-endo", "medicated", "incomplete", "completed"]);
-const VALID_RESTORATION_TYPE = new Set(["none", "crown", "bridge", "veneer", "onlay", "vonlay"]);
+const VALID_RESTORATION_TYPE = new Set(["none", "crown", "bridge", "veneer", "onlay", "vonlay", "overlay"]);
 const VALID_RESTORATION_MATERIAL = new Set(["none", "zircon", "emax", "metal", "pfm", "pfz"]);
 const VALID_POST_CORE_TYPE = new Set(["none", "metal-post", "fiber-post"]);
 const VALID_IMPLANT_COMPONENT = new Set(["none", "cover-screw", "healing-abutment", "crown", "bridge"]);
@@ -1670,7 +1701,11 @@ function hydrateState(raw: Any) {
   s.caries = filterSet(raw.caries, VALID_CARIES);
   s.caries_data = Array.isArray(raw.caries_data) ? raw.caries_data.filter((d: any) => d && typeof d.surface === "string") : [];
   s.cariesNote = typeof raw.cariesNote === "string" ? raw.cariesNote : "";
-  s.filling_data = Array.isArray(raw.filling_data) ? raw.filling_data.filter((d: any) => d && typeof d.surface === "string") : [];
+  s.filling_data = Array.isArray(raw.filling_data)
+    ? raw.filling_data
+        .filter((d: any) => d && typeof d.surface === "string")
+        .map((d: any) => ({ ...d, surface: d.surface.replace("filling-surface-", "") }))
+    : [];
   s.size_mm = typeof raw.size_mm === "string" ? raw.size_mm : "";
   s.fillingNote = typeof raw.fillingNote === "string" ? raw.fillingNote : "";
   s.fissureSealing = !!raw.fissureSealing;
@@ -1723,22 +1758,7 @@ function hydrateState(raw: Any) {
 }
 
 function exportStatus() {
-  const teeth = {};
-  for (const toothNo of ALL_TEETH) {
-    const s = toothState.get(toothNo) ?? defaultState();
-    teeth[toothNo] = serializeState(s);
-  }
-  const payload = {
-    version: "1.2",
-    globals: {
-      wisdomVisible,
-      showBase,
-      occlusalVisible,
-      showHealthyPulp,
-      edentulous,
-    },
-    teeth,
-  };
+  const payload = getOdontogramStatusSnapshot();
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1772,6 +1792,11 @@ function importStatus(data: Any) {
   }
   updateSelectionFilterButtons();
   updateSelectionUI();
+}
+
+export function loadOdontogramStatusSnapshot(data: OdontogramStatusSnapshot | null | undefined) {
+  if (!data) return;
+  importStatus(data);
 }
 
 function applyStatusExtra(option: Any) {
@@ -2275,6 +2300,7 @@ function wireControls() {
       setControlsEnabled(true);
       syncControlsFromState(toothState.get(activeTooth));
     }
+    notifyOdontogramListeners();
   });
 
   $("#btnResetAll")?.addEventListener("click", () => {
@@ -2288,6 +2314,7 @@ function wireControls() {
       setControlsEnabled(true);
       syncControlsFromState(toothState.get(activeTooth));
     }
+    notifyOdontogramListeners();
   });
 
   $("#btnPrimaryDentition")?.addEventListener("click", () => {
@@ -2306,6 +2333,7 @@ function wireControls() {
     }
     suppressEdentulousSync = false;
     if (activeTooth) syncControlsFromState(toothState.get(activeTooth));
+    notifyOdontogramListeners();
   });
 
   $("#btnMixedDentition")?.addEventListener("click", () => {
@@ -2326,6 +2354,7 @@ function wireControls() {
     }
     suppressEdentulousSync = false;
     if (activeTooth) syncControlsFromState(toothState.get(activeTooth));
+    notifyOdontogramListeners();
   });
 
   // Status extras

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, ScanFace, Smile, Mic2, Loader2, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { VisualCard, TextCard } from './components/ChartUIComponents';
 import { SectionNotes } from './components/SectionNotes';
 import { estheticEvaluationService, type EstheticEvaluationPayload } from '@/services/estheticEvaluationService';
 import { useToastStore } from '@/store/toastStore';
+import { useSectionSave } from '@/hooks/useSectionSave';
 
 interface EstheticEvaluationProps {
     chartId: string;
@@ -58,25 +59,15 @@ const DEFAULT_STATE: LocalEstheticState = {
     note: '',
 };
 
-function useDebounce<T>(value: T, delay: number): T {
-    const [debouncedValue, setDebouncedValue] = useState<T>(value);
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedValue(value);
-        }, delay);
-        return () => clearTimeout(handler);
-    }, [value, delay]);
-    return debouncedValue;
-}
-
 export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps) {
     const { show: showToast } = useToastStore();
     const [formData, setFormData] = useState<LocalEstheticState>(DEFAULT_STATE);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+    const { markDirty, markClean, registerSave } = useSectionSave("esthetic");
 
-    const debouncedData = useDebounce(formData, 1000);
+    const formDataRef = useRef(formData);
+    useEffect(() => { formDataRef.current = formData; }, [formData]);
 
     // Fetch initial data
     useEffect(() => {
@@ -86,7 +77,7 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                 setLoading(true);
                 const estheticData = await estheticEvaluationService.get(chartId);
                 if (estheticData) {
-                    setFormData({
+                    const mapped = {
                         occlusalPlane: estheticData.occlusal_plane || 'parallel',
                         facialMidline: estheticData.midline_discrepancy || 'symmetric',
                         facialMidlineMm: estheticData.midline_shift?.toString() || '',
@@ -106,66 +97,60 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                         sSoundMm: estheticData.closest_speaking?.toString() || '',
                         sSoundRef: estheticData.reference_teeth ? estheticData.reference_teeth.join(', ') : '',
                         note: estheticData.note || '',
-                    });
+                    };
+                    setFormData(mapped);
                 }
             } catch (err) {
                 console.error("Failed to fetch esthetic evaluation", err);
+                showToast("Failed to load esthetic evaluation.", "error");
             } finally {
                 setLoading(false);
-                setInitialDataLoaded(true);
+                registerSave(async () => {
+                    const d = formDataRef.current;
+                    setSaving(true);
+                    try {
+                        const payload: EstheticEvaluationPayload = {
+                            occlusal_plane: d.occlusalPlane,
+                            midline_discrepancy: d.facialMidline,
+                            midline_shift: d.facialMidlineMm ? parseFloat(d.facialMidlineMm) : null,
+                            lip_thickness: d.lipFullness,
+                            lip_length: d.lipLength,
+                            upper_tooth_exposure: d.toothExpUpper ? parseFloat(d.toothExpUpper) : null,
+                            lower_tooth_exposure: d.toothExpLower ? parseFloat(d.toothExpLower) : null,
+                            nasolabial_angle: d.nasolabialAngle,
+                            fv_sound: d.fvSound === 'yes',
+                            closest_speaking: d.sSoundMm ? parseFloat(d.sSoundMm) : null,
+                            reference_teeth: d.sSoundRef ? d.sSoundRef.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : null,
+                            dentofacial_analysis: {
+                                smile_line: d.smileLine,
+                                incisal_curve: d.incisalCurve,
+                                lip_position: d.lipPosition,
+                                teeth_exposed: d.teethExposed,
+                                midline_philtrum: d.midlinePhiltrum,
+                                midline_incisors: d.midlineIncisors,
+                                buccal_corridor: d.buccalCorridor,
+                            },
+                            note: d.note,
+                        };
+                        await estheticEvaluationService.upsert(chartId, payload);
+                    } catch (err) {
+                        showToast("Failed to save esthetic evaluation.", "error");
+                        throw err;
+                    } finally {
+                        setSaving(false);
+                    }
+                });
+                markClean();
             }
         };
 
         fetchEval();
-    }, [chartId]);
-
-    // Auto-save when debounced data changes
-    useEffect(() => {
-        const saveData = async () => {
-            if (!chartId || !initialDataLoaded) return;
-            
-            setSaving(true);
-            try {
-                const payload: EstheticEvaluationPayload = {
-                    occlusal_plane: debouncedData.occlusalPlane,
-                    midline_discrepancy: debouncedData.facialMidline,
-                    midline_shift: debouncedData.facialMidlineMm ? parseFloat(debouncedData.facialMidlineMm) : null,
-                    lip_thickness: debouncedData.lipFullness,
-                    lip_length: debouncedData.lipLength,
-                    upper_tooth_exposure: debouncedData.toothExpUpper ? parseFloat(debouncedData.toothExpUpper) : null,
-                    lower_tooth_exposure: debouncedData.toothExpLower ? parseFloat(debouncedData.toothExpLower) : null,
-                    nasolabial_angle: debouncedData.nasolabialAngle,
-                    fv_sound: debouncedData.fvSound === 'yes',
-                    closest_speaking: debouncedData.sSoundMm ? parseFloat(debouncedData.sSoundMm) : null,
-                    reference_teeth: debouncedData.sSoundRef ? debouncedData.sSoundRef.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : null,
-                    dentofacial_analysis: {
-                        smile_line: debouncedData.smileLine,
-                        incisal_curve: debouncedData.incisalCurve,
-                        lip_position: debouncedData.lipPosition,
-                        teeth_exposed: debouncedData.teethExposed,
-                        midline_philtrum: debouncedData.midlinePhiltrum,
-                        midline_incisors: debouncedData.midlineIncisors,
-                        buccal_corridor: debouncedData.buccalCorridor,
-                    },
-                    note: debouncedData.note
-                };
-
-                await estheticEvaluationService.upsert(chartId, payload);
-            } catch (err) {
-                console.error("Failed to save esthetic evaluation", err);
-                showToast("Failed to save esthetic evaluation.", "error");
-            } finally {
-                // Keep the checkmark visible a bit longer for UX
-                setTimeout(() => setSaving(false), 800);
-            }
-        };
-
-        saveData();
-    }, [debouncedData, chartId, initialDataLoaded, showToast]);
+    }, [chartId, showToast, registerSave, markClean]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateField = (field: keyof LocalEstheticState, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+        markDirty();
     };
 
     if (loading) {

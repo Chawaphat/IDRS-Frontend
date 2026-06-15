@@ -32,13 +32,13 @@ export default function LandingPage() {
           </div>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="max-md:hidden flex items-center gap-8">
             <a href="#features" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Features</a>
             <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">How it Works</a>
             <a href="#ai-demo" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">AI Diagnostics</a>
           </div>
 
-          <div className="hidden md:flex items-center gap-4">
+          <div className="max-md:hidden flex items-center gap-4">
             <button 
               onClick={() => navigate('/auth/login')}
               className="text-sm font-semibold text-slate-700 hover:text-primary px-4 py-2 transition-colors"

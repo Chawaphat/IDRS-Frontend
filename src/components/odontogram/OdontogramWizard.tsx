@@ -25,6 +25,75 @@ type WizardPath = "tooth" | "edentulous" | "implant";
 
 const FISSURE_ALLOWED = new Set([16, 17, 26, 27, 36, 37, 46, 47]);
 
+function ToothSummaryBadges({ state }: { state: ToothState }) {
+  const badges: { label: string; color: string }[] = [];
+
+  const baseLabel: Record<string, string> = {
+    "tooth-base": "Permanent",
+    milktooth: "Primary",
+    implant: "Implant",
+    none: "Edentulous",
+    "tooth-under-gum": "Impacted",
+  };
+  if (state.toothSelection !== "tooth-base") {
+    badges.push({ label: baseLabel[state.toothSelection] ?? state.toothSelection, color: "bg-slate-100 text-slate-600" });
+  }
+
+  if (state.caries_data.length > 0) {
+    const surfaces = [...new Set(state.caries_data.map(c => c.surface))].join(", ");
+    badges.push({ label: `Caries: ${surfaces}`, color: "bg-amber-100 text-amber-800" });
+  }
+  if (state.filling_data.length > 0) {
+    const mats = [...new Set(state.filling_data.map(f => f.material))].join(", ");
+    badges.push({ label: `Filling: ${mats}`, color: "bg-blue-100 text-blue-800" });
+  }
+  if (state.mobility !== "none") {
+    badges.push({ label: `Mobility ${state.mobility.toUpperCase()}`, color: "bg-orange-100 text-orange-800" });
+  }
+  if (state.recession_mm) {
+    badges.push({ label: `Recession ${state.recession_mm}mm`, color: "bg-orange-100 text-orange-800" });
+  }
+  if (state.pulpInflam) badges.push({ label: "Pulpitis", color: "bg-red-100 text-red-700" });
+  if (state.ept_result !== "none") badges.push({ label: `EPT: ${state.ept_result}`, color: "bg-red-100 text-red-700" });
+  if (state.root_canal !== "no-endo") {
+    const rcLabel: Record<string, string> = { medicated: "RCT: Medicated", incomplete: "RCT: Incomplete", completed: "RCT: Completed" };
+    badges.push({ label: rcLabel[state.root_canal] ?? state.root_canal, color: "bg-purple-100 text-purple-800" });
+  }
+  if (state.restorationType !== "none") {
+    const mat = state.restorationMaterial !== "none" ? ` (${state.restorationMaterial})` : "";
+    badges.push({ label: `${state.restorationType}${mat}`, color: "bg-teal-100 text-teal-800" });
+  }
+  if (state.crownMaterial === "broken") {
+    const parts = [state.brokenMesial && "M", state.brokenIncisal && "I", state.brokenDistal && "D"].filter(Boolean).join("");
+    badges.push({ label: `Fracture${parts ? `: ${parts}` : ""}`, color: "bg-rose-100 text-rose-800" });
+  }
+  if (state.fissureSealing) badges.push({ label: "Fissure Sealing", color: "bg-green-100 text-green-800" });
+  if (state.bruxismWear) badges.push({ label: "Bruxism", color: "bg-yellow-100 text-yellow-800" });
+  if (state.contactMesial || state.contactDistal) badges.push({ label: "Missing Contact", color: "bg-slate-100 text-slate-600" });
+  if (state.extractionPlan) badges.push({ label: "Extraction Plan", color: "bg-rose-100 text-rose-800" });
+  if (state.implant_component && state.implant_component !== "none") {
+    badges.push({ label: `Implant: ${state.implant_component}`, color: "bg-indigo-100 text-indigo-800" });
+  }
+  if (state.bridgeUnit && state.bridgeUnit !== "none") {
+    badges.push({ label: `Bridge: ${state.bridgeUnit}`, color: "bg-teal-100 text-teal-800" });
+  }
+
+  if (badges.length === 0) return null;
+
+  return (
+    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Current Conditions</p>
+      <div className="flex flex-wrap gap-1.5">
+        {badges.map((b, i) => (
+          <span key={i} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${b.color}`}>
+            {b.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
 function isUpperTooth(toothNo: number) {
@@ -289,7 +358,7 @@ function SurfaceDPad({
   const valueFor = (key: string) => (mode === "caries" ? `caries-${key}` : key);
 
   return (
-    <div className="grid grid-cols-3 grid-rows-3 gap-2 max-w-[220px] mx-auto">
+    <div className="grid grid-cols-[64px_64px_64px] grid-rows-3 gap-2 w-fit">
       {surfaces.map((surface) => {
         const value = valueFor(surface.key);
         return (
@@ -299,7 +368,7 @@ function SurfaceDPad({
             onClick={() => onSelect(value)}
             title={surface.label}
             className={cx(
-              "h-14 rounded-lg border text-center transition-colors",
+              "h-16 w-16 rounded-lg border text-center transition-colors",
               "flex flex-col items-center justify-center leading-none",
               surface.place,
               selectedSurfaces.includes(value) && activeSurface !== value
@@ -309,8 +378,8 @@ function SurfaceDPad({
                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             )}
           >
-            <span className="text-sm font-black">{surface.short}</span>
-            <span className="mt-1 text-[9px] font-semibold uppercase tracking-wide">{surface.label}</span>
+            <span className="text-xs font-black">{surface.short}</span>
+            <span className="mt-0.5 text-[7px] font-semibold uppercase tracking-wide">{surface.label}</span>
           </button>
         );
       })}
@@ -322,22 +391,21 @@ function CariesSection({ toothNo, state }: { toothNo: number; state: ToothState 
   const update = (fn: (state: ToothState) => void) => updateToothState(toothNo, fn);
   const [activeSurface, setActiveSurface] = useState<string | null>(null);
 
-  const depthOptions: Array<{ value: CariesDepth; label: string }> = [
-    { value: "enamel", label: "Enamel" },
-    { value: "dentine", label: "Dentine" },
-    { value: "pulp", label: "Pulp" },
+  const depthOptions: Array<{ value: CariesDepth; label: string; desc: string }> = [
+    { value: "enamel", label: "Enamel", desc: "Superficial" },
+    { value: "dentine", label: "Dentine", desc: "Moderate" },
+    { value: "pulp", label: "Pulp", desc: "Deep" },
   ];
 
   const selectedSurfaces = state.caries_data.map(d => d.surface);
+  const activeData = activeSurface ? state.caries_data.find(d => d.surface === activeSurface) : null;
 
   return (
     <Section title="Caries">
-      <div className="flex flex-col gap-4">
-        <StepIndicator 
-          steps={["Select Surface", "Depth"]} 
-          currentStep={activeSurface ? 1 : 0} 
-        />
-        <FieldGroup label="1. Select Surfaces">
+      <div className="grid grid-cols-[210px_minmax(0,260px)] gap-5 items-stretch">
+        {/* Left: + pad */}
+        <div className="flex flex-col gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Surface</span>
           <SurfaceDPad
             toothNo={toothNo}
             selectedSurfaces={selectedSurfaces}
@@ -347,41 +415,61 @@ function CariesSection({ toothNo, state }: { toothNo: number; state: ToothState 
               setActiveSurface(activeSurface === surface ? null : surface);
             }}
           />
-        </FieldGroup>
-        
-        {activeSurface && (
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <FieldGroup label={`2. ${activeSurface.replace("caries-", "").toUpperCase()} DEPTH`} className="flex-1">
-              <div className="grid grid-cols-3 gap-2">
-                {depthOptions.map((option) => {
-                  const currentData = state.caries_data.find(d => d.surface === activeSurface);
-                  const isActive = currentData?.depth === option.value;
-                  return (
-                    <Chip
-                      key={option.value}
-                      active={isActive}
-                      tone={option.value === "pulp" ? "rose" : "teal"}
-                      onClick={() => update((draft) => {
-                        const idx = draft.caries_data.findIndex(d => d.surface === activeSurface);
-                        if (idx >= 0) {
-                          if (draft.caries_data[idx].depth === option.value) {
-                            draft.caries_data.splice(idx, 1);
-                          } else {
-                            draft.caries_data[idx].depth = option.value;
-                          }
+        </div>
+
+        {/* Right: Depth panel — always visible */}
+        <div className="flex flex-col gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+            {activeSurface
+              ? `Depth — ${activeSurface.replace("caries-", "").toUpperCase()}`
+              : "Depth"}
+          </span>
+          <div className={cx(
+            "flex-1 rounded-xl border p-3 flex flex-col justify-center gap-2.5 transition-colors",
+            activeSurface ? "border-teal-200 bg-teal-50/40" : "border-slate-100 bg-slate-50"
+          )}>
+            {activeSurface ? (
+              depthOptions.map((option) => {
+                const isActive = activeData?.depth === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => update((draft) => {
+                      const idx = draft.caries_data.findIndex(d => d.surface === activeSurface);
+                      if (idx >= 0) {
+                        if (draft.caries_data[idx].depth === option.value) {
+                          draft.caries_data.splice(idx, 1);
                         } else {
-                          draft.caries_data.push({ surface: activeSurface, depth: option.value });
+                          draft.caries_data[idx].depth = option.value;
                         }
-                      })}
-                    >
-                      {option.label}
-                    </Chip>
-                  );
-                })}
-              </div>
-            </FieldGroup>
+                      } else {
+                        draft.caries_data.push({ surface: activeSurface!, depth: option.value });
+                      }
+                    })}
+                    className={cx(
+                      "w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm font-semibold transition-colors",
+                      isActive
+                        ? option.value === "pulp"
+                          ? "bg-rose-500 border-rose-500 text-white"
+                          : "bg-teal-500 border-teal-500 text-white"
+                        : "bg-white border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50"
+                    )}
+                  >
+                    <span>{option.label}</span>
+                    <span className={cx("text-[11px] font-normal", isActive ? "opacity-80" : "text-slate-400")}>
+                      {option.desc}
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-8">
+                Select a surface to set depth
+              </p>
+            )}
           </div>
-        )}
+        </div>
       </div>
       <NoteInput value={state.cariesNote} onChange={(value) => update((draft) => { draft.cariesNote = value; })} />
     </Section>
@@ -427,6 +515,7 @@ function FillingSection({ toothNo, state, isPrimary }: { toothNo: number; state:
         
         <div className={cx("transition-all duration-300", activeMaterial ? "opacity-100" : "opacity-40 pointer-events-none")}>
           <FieldGroup label="2. Apply to Surfaces">
+            <div className="flex justify-center">
             <SurfaceDPad
               toothNo={toothNo}
               selectedSurfaces={selectedSurfaces}
@@ -448,6 +537,7 @@ function FillingSection({ toothNo, state, isPrimary }: { toothNo: number; state:
                 });
               }}
             />
+            </div>
           </FieldGroup>
         </div>
       </div>
@@ -570,6 +660,7 @@ function RestorationSection({ toothNo, state, isPrimary }: { toothNo: number; st
     { value: "veneer", label: "Veneer" },
     { value: "onlay", label: "Onlay" },
     { value: "vonlay", label: "Vonlay" },
+    { value: "overlay", label: "Overlay" },
   ];
   const materials: Array<{ value: RestorationMaterial; label: string }> = [
     { value: "zircon", label: "Zirconia" },
@@ -702,6 +793,10 @@ function RestorationSection({ toothNo, state, isPrimary }: { toothNo: number; st
 
 function OthersSection({ toothNo, state, isPrimary }: { toothNo: number; state: ToothState; isPrimary: boolean }) {
   const update = (fn: (state: ToothState) => void) => updateToothState(toothNo, fn);
+  const hasFracture = state.crownMaterial === "broken";
+
+  const isIncisalTooth = [11,12,13,21,22,23,31,32,33,41,42,43].includes(toothNo) ||
+    [51,52,53,61,62,63,71,72,73,81,82,83].includes(toothNo);
 
   return (
     <Section title="Others">
@@ -731,6 +826,25 @@ function OthersSection({ toothNo, state, isPrimary }: { toothNo: number; state: 
             Missing Contact
           </Chip>
           <Chip
+            active={hasFracture}
+            tone={hasFracture ? "rose" : "slate"}
+            onClick={() => update((draft) => {
+              if (hasFracture) {
+                draft.crownMaterial = "natural";
+                draft.brokenMesial = false;
+                draft.brokenIncisal = false;
+                draft.brokenDistal = false;
+              } else {
+                draft.crownMaterial = "broken";
+                draft.brokenMesial = true;
+                draft.brokenDistal = true;
+                if (isIncisalTooth) draft.brokenIncisal = true;
+              }
+            })}
+          >
+            Tooth Fracture
+          </Chip>
+          <Chip
             active={state.extractionPlan}
             tone="rose"
             onClick={() => update((draft) => { draft.extractionPlan = !draft.extractionPlan; })}
@@ -739,6 +853,37 @@ function OthersSection({ toothNo, state, isPrimary }: { toothNo: number; state: 
           </Chip>
         </div>
       </FieldGroup>
+
+      {hasFracture && (
+        <FieldGroup label="Fracture Location">
+          <div className="flex flex-wrap gap-2">
+            <Chip
+              active={state.brokenMesial}
+              tone="rose"
+              onClick={() => update((draft) => { draft.brokenMesial = !draft.brokenMesial; })}
+            >
+              Mesial
+            </Chip>
+            {isIncisalTooth && (
+              <Chip
+                active={state.brokenIncisal}
+                tone="rose"
+                onClick={() => update((draft) => { draft.brokenIncisal = !draft.brokenIncisal; })}
+              >
+                Incisal
+              </Chip>
+            )}
+            <Chip
+              active={state.brokenDistal}
+              tone="rose"
+              onClick={() => update((draft) => { draft.brokenDistal = !draft.brokenDistal; })}
+            >
+              Distal
+            </Chip>
+          </div>
+        </FieldGroup>
+      )}
+
       <NoteInput value={state.othersNote} onChange={(value) => update((draft) => { draft.othersNote = value; })} />
     </Section>
   );
@@ -1009,7 +1154,7 @@ export function OdontogramWizard() {
 
   const chooseBase = (nextPath: WizardPath, toothSelection?: ToothState["toothSelection"]) => {
     if (toothNo == null) return;
-    if (toothSelection) {
+    if (toothSelection && toothSelection !== state?.toothSelection) {
       replaceToothState(toothNo, makeSelectionState(toothSelection));
     }
     setPath(nextPath);
@@ -1082,6 +1227,7 @@ export function OdontogramWizard() {
                 </div>
               </FieldGroup>
             </Section>
+            <ToothSummaryBadges state={state} />
           </div>
         ) : (
           <div className="space-y-3">

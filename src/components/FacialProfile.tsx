@@ -19,9 +19,9 @@ export const FacialProfile: React.FC<FacialProfileProps> = ({ value, onChange })
                 
                 <div className="grid grid-cols-3 gap-3">
                     {[
-                        { id: 'straight', label: 'Straight', sub: 'ตรง', img: straightImg },
-                        { id: 'convex', label: 'Convex', sub: 'นูน', img: convexImg },
-                        { id: 'concave', label: 'Concave', sub: 'เว้า', img: concaveImg }
+                        { id: 'straight', label: 'Straight', sub: 'Normal', img: straightImg },
+                        { id: 'convex', label: 'Convex', sub: 'Protrusive', img: convexImg },
+                        { id: 'concave', label: 'Concave', sub: 'Retrusive', img: concaveImg }
                     ].map(opt => {
                         const isSelected = value === opt.id;
                         return (

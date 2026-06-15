@@ -13,11 +13,11 @@ interface RankedExpectationSelectorProps {
 }
 
 const OPTIONS = [
-    { id: 'chewing', label: 'Chewing', th: 'การบดเคี้ยวอาหาร' },
-    { id: 'esthetic', label: 'Esthetic', th: 'ความสวยงาม' },
-    { id: 'health', label: 'Health', th: 'การรักษาสุขภาพฟันและอวัยวะ' },
-    { id: 'phonetics', label: 'Phonetics', th: 'การออกเสียง' },
-    { id: 'others', label: 'Others...', th: 'อื่นๆ' },
+    { id: 'chewing', label: 'Chewing', th: 'Masticatory function' },
+    { id: 'esthetic', label: 'Esthetic', th: 'Appearance & aesthetics' },
+    { id: 'health', label: 'Health', th: 'Oral health maintenance' },
+    { id: 'phonetics', label: 'Phonetics', th: 'Speech & phonation' },
+    { id: 'others', label: 'Others...', th: 'Please specify below' },
 ];
 
 export const RankedExpectationSelector: React.FC<RankedExpectationSelectorProps> = ({

@@ -1,23 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Ruler, UserMinus, Focus, AlertTriangle } from "lucide-react";
+import { useToastStore } from "@/store/toastStore";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { vdoEvaluationService } from "@/services/vdoEvaluationService";
 import type { VdoEvaluationUpdate, FacialConditionType, BiteType } from "@/services/types/vdoEvaluation";
 import { SectionNotes } from "./components/SectionNotes";
+import { useSectionSave } from "@/hooks/useSectionSave";
 
 interface VdoEvaluationFormProps {
   chartId: string;
-}
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
 }
 
 const SelectCard = ({ label, subLabel, isSelected, onClick }: { label: string; subLabel?: string; isSelected: boolean; onClick: () => void }) => (
@@ -36,10 +29,10 @@ const SelectCard = ({ label, subLabel, isSelected, onClick }: { label: string; s
 );
 
 export default function VdoEvaluationForm({ chartId }: VdoEvaluationFormProps) {
+  const { show: showToast } = useToastStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-  const [isNewRecord, setIsNewRecord] = useState(false);
+  const { markDirty, markClean, registerSave } = useSectionSave("vdo");
 
   const [formData, setFormData] = useState<VdoEvaluationUpdate>({
     facial_soft_tissue: [],
@@ -50,7 +43,8 @@ export default function VdoEvaluationForm({ chartId }: VdoEvaluationFormProps) {
     note: "",
   });
 
-  const debouncedFormData = useDebounce(formData, 1000);
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,60 +52,41 @@ export default function VdoEvaluationForm({ chartId }: VdoEvaluationFormProps) {
         setLoading(true);
         const data = await vdoEvaluationService.getByChart(chartId);
         if (data) {
-          setFormData({
+          const mapped = {
             facial_soft_tissue: data.facial_soft_tissue || [],
             closest_speaking: data.closest_speaking ?? null,
             free_way_space: data.free_way_space ?? null,
             bite_type: data.bite_type ?? null,
             reference_teeth: data.reference_teeth || [],
             note: data.note || "",
-          });
+          };
+          setFormData(mapped);
         }
       } catch (err: any) {
-        if (err?.response?.status === 404) {
-          setIsNewRecord(true);
-        } else {
-          console.error("Error fetching VDO Evaluation:", err);
-        }
+        console.error("Error fetching VDO Evaluation:", err);
+        showToast("Failed to load VDO evaluation.", "error");
       } finally {
         setLoading(false);
-        setTimeout(() => setInitialDataLoaded(true), 500);
+        registerSave(async () => {
+          setSaving(true);
+          try {
+            await vdoEvaluationService.update(chartId, formDataRef.current);
+          } catch (err) {
+            showToast("Failed to save VDO evaluation.", "error");
+            throw err;
+          } finally {
+            setSaving(false);
+          }
+        });
+        markClean();
       }
     };
     if (chartId) fetchData();
-  }, [chartId]);
-
-  useEffect(() => {
-    const saveData = async () => {
-      if (!initialDataLoaded || loading) return;
-      try {
-        setSaving(true);
-        if (isNewRecord) {
-          await vdoEvaluationService.create(chartId, debouncedFormData as any);
-          setIsNewRecord(false);
-        } else {
-          try {
-            await vdoEvaluationService.update(chartId, debouncedFormData);
-          } catch (updateErr: any) {
-            if (updateErr?.response?.status === 404) {
-              await vdoEvaluationService.create(chartId, debouncedFormData as any);
-              setIsNewRecord(false);
-            } else {
-              throw updateErr;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error saving VDO Evaluation:", err);
-      } finally {
-        setSaving(false);
-      }
-    };
-    saveData();
-  }, [debouncedFormData, chartId, initialDataLoaded, loading]);
+  }, [chartId, showToast, registerSave, markClean]);
 
   const updateField = (field: keyof VdoEvaluationUpdate, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    markDirty();
   };
 
   const toggleArrayField = (value: FacialConditionType) => {
@@ -122,6 +97,7 @@ export default function VdoEvaluationForm({ chartId }: VdoEvaluationFormProps) {
       }
       return { ...prev, facial_soft_tissue: [...arr, value] };
     });
+    markDirty();
   };
 
   if (loading) {

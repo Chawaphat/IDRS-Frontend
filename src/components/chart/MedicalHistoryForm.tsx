@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Check, FileText, CalendarDays, MessageSquareText, HeartPulse, Activity, Trash2, Stethoscope, Clock, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { medicalHistoryService } from "@/services/medicalHistoryService";
 import type { MedicalHistoryUpdate, AllergyStatusType, PatientExpectationsType, Medication } from "@/services/types/medicalHistory";
 import { useToastStore } from "@/store/toastStore";
 import { SectionNotes } from "./components/SectionNotes";
+import { useSectionSave } from "@/hooks/useSectionSave";
 
 interface MedicalHistoryFormProps {
   chartId: string;
@@ -21,23 +22,25 @@ interface MedicalHistoryFormProps {
   onEditPatient?: () => void;
 }
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
-
 export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: MedicalHistoryFormProps) {
   const { show: showToast } = useToastStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const { markDirty, markClean, registerSave } = useSectionSave("patientHistory");
   const [visitDate, setVisitDate] = useState<Date | undefined>(new Date());
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validateField = (name: string, value: string) => {
+    const required: Record<string, string> = {
+      chief_complaint: "Chief Complaint is required.",
+      present_illness: "Present Illness is required.",
+    };
+    if (name in required && !value.trim()) {
+      setFieldErrors(e => ({ ...e, [name]: required[name] }));
+    } else {
+      setFieldErrors(e => { const n = { ...e }; delete n[name]; return n; });
+    }
+  };
   
   const [formData, setFormData] = useState<MedicalHistoryUpdate>({
     chief_complaint: "",
@@ -64,7 +67,8 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
   const [hasMedications, setHasMedications] = useState<boolean | null>(null);
   const [medFormInput, setMedFormInput] = useState({ name: "", dose: "", frequency: "", dosePerTime: "", timeOfDay: "" });
 
-  const debouncedFormData = useDebounce(formData, 1000);
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,7 +76,7 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
         setLoading(true);
         const data = await medicalHistoryService.getByChart(chartId);
         if (data) {
-          setFormData({
+          const mapped: MedicalHistoryUpdate = {
             chief_complaint: data.chief_complaint || "",
             present_illness: data.present_illness || "",
             medical_history: data.medical_history || "",
@@ -92,7 +96,8 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
             present_denture_age: data.present_denture_age || "",
             denture_complaint: data.denture_complaint || "",
             note: data.note || ""
-          });
+          };
+          setFormData(mapped);
           if (data.current_medication && data.current_medication.length > 0) {
             setHasMedications(true);
           } else if (data.current_medication && data.current_medication.length === 0) {
@@ -105,37 +110,26 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
         }
       } finally {
         setLoading(false);
-        setInitialDataLoaded(true);
+        registerSave(async () => {
+          setSaving(true);
+          try {
+            await medicalHistoryService.update(chartId, formDataRef.current);
+          } catch (err) {
+            showToast("Failed to save medical history.", "error");
+            throw err;
+          } finally {
+            setSaving(false);
+          }
+        });
+        markClean();
       }
     };
     fetchData();
   }, [chartId, showToast]);
 
-  useEffect(() => {
-    if (!initialDataLoaded) return;
-    const saveToBackend = async () => {
-      try {
-        setSaving(true);
-        try {
-          await medicalHistoryService.update(chartId, debouncedFormData);
-        } catch (updateErr: any) {
-          if (updateErr?.response?.status === 404) {
-            await medicalHistoryService.create(chartId, debouncedFormData as any);
-          } else {
-            throw updateErr;
-          }
-        }
-      } catch (err) {
-        console.error("Auto-save failed", err);
-      } finally {
-        setSaving(false);
-      }
-    };
-    saveToBackend();
-  }, [debouncedFormData, chartId, initialDataLoaded]);
-
   const updateField = (field: keyof MedicalHistoryUpdate, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    markDirty();
   };
 
   if (loading) {
@@ -225,24 +219,36 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
           </div>
           <div className="p-6 space-y-6">
               <div className="space-y-3">
-                  <Label htmlFor="chief_complaint" className="text-sm font-bold text-slate-700">Chief Complaint</Label>
+                  <Label htmlFor="chief_complaint" className="text-sm font-bold text-slate-700">
+                    Chief Complaint <span className="text-red-500 ml-0.5">*</span>
+                  </Label>
                   <Textarea
                       id="chief_complaint"
                       value={formData.chief_complaint || ""}
                       onChange={e => updateField("chief_complaint", e.target.value)}
-                      className="h-20 resize-none focus-visible:ring-teal-500"
+                      onBlur={e => validateField("chief_complaint", e.target.value)}
+                      className={cn("h-20 resize-none focus-visible:ring-teal-500", fieldErrors.chief_complaint && "border-red-400 focus-visible:ring-red-400")}
                       placeholder="Patient's primary reason for visiting..."
                   />
+                  {fieldErrors.chief_complaint && (
+                    <p className="text-xs text-red-500 mt-1">{fieldErrors.chief_complaint}</p>
+                  )}
               </div>
               <div className="space-y-3">
-                  <Label htmlFor="present_illness" className="text-sm font-bold text-slate-700">Present Illness</Label>
+                  <Label htmlFor="present_illness" className="text-sm font-bold text-slate-700">
+                    Present Illness <span className="text-red-500 ml-0.5">*</span>
+                  </Label>
                   <Textarea
                       id="present_illness"
                       value={formData.present_illness || ""}
                       onChange={e => updateField("present_illness", e.target.value)}
-                      className="h-24 resize-none focus-visible:ring-teal-500"
+                      onBlur={e => validateField("present_illness", e.target.value)}
+                      className={cn("h-24 resize-none focus-visible:ring-teal-500", fieldErrors.present_illness && "border-red-400 focus-visible:ring-red-400")}
                       placeholder="History and details of the present illness..."
                   />
+                  {fieldErrors.present_illness && (
+                    <p className="text-xs text-red-500 mt-1">{fieldErrors.present_illness}</p>
+                  )}
               </div>
           </div>
       </div>
@@ -444,8 +450,8 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                                           </tr>
                                       </thead>
                                       <tbody>
-                                          {(formData.current_medication || []).map((med) => (
-                                              <tr key={med.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                          {(formData.current_medication || []).map((med, idx) => (
+                                              <tr key={med.id ?? idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                                   <td className="px-4 py-2.5 text-sm font-semibold text-slate-700">{med.name}</td>
                                                   <td className="px-4 py-2.5 text-sm text-slate-600">{med.dose}</td>
                                                   <td className="px-4 py-2.5 text-sm text-slate-600">{med.frequency}</td>

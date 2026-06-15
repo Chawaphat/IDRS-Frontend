@@ -140,6 +140,53 @@ html {
   }
 }
 
+/* ─── Print Stylesheet ─────────────────────────────────────────────────────── */
+@media print {
+  /* Hide navigation chrome, action buttons, and interactive controls */
+  nav,
+  aside,
+  header,
+  [data-no-print],
+  button:not([data-print-show]),
+  .animate-spin,
+  ::-webkit-scrollbar { display: none !important; }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Reset card backgrounds to plain white */
+  .bg-slate-50, .bg-white, .glass, .glass-card {
+    background: #ffffff !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure SVG odontogram prints */
+  svg { max-width: 100% !important; overflow: visible !important; }
+
+  /* Page break helpers */
+  .page-break-before { page-break-before: always; }
+  .page-break-after  { page-break-after: always; }
+  .no-page-break     { page-break-inside: avoid; }
+
+  /* Widen content to full page */
+  main, [data-print-content] {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Make teal readable in B&W fallback */
+  .text-teal-600, .text-teal-700 { color: #000000 !important; }
+  .border-teal-500, .border-teal-600 { border-color: #000000 !important; }
+}
+
 /* Toggle Button Styling */
 .toggle-group {
   display: flex;

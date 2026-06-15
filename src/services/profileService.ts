@@ -1,16 +1,9 @@
 import api from '@/lib/api';
-
-export interface UserProfile {
-  id: string;
-  full_name?: string | null;
-  license_id?: string | null;
-  phone?: string | null;
-  role?: string | null;
-}
+export type { UserProfile } from '@/services/authService';
 
 export const profileService = {
-  getMe: async (): Promise<UserProfile> => {
-    const response = await api.get<UserProfile>('/profiles/me');
+  getMe: async (): Promise<import('@/services/authService').UserProfile> => {
+    const response = await api.get<import('@/services/authService').UserProfile>('/auth/me');
     return response.data;
   },
 
@@ -21,8 +14,8 @@ export const profileService = {
       license_id: string;
       phone: string;
     }
-  ): Promise<UserProfile> => {
-    const response = await api.put<UserProfile>(`/profiles/${id}`, payload);
+  ): Promise<import('@/services/authService').UserProfile> => {
+    const response = await api.put<import('@/services/authService').UserProfile>(`/profiles/${id}`, payload);
     return response.data;
   },
 };

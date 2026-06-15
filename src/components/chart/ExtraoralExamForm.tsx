@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Info, Activity, Zap, UserSquare2 } from "lucide-react";
+import { useToastStore } from "@/store/toastStore";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,27 +18,18 @@ import { FacialProfile } from "@/components/FacialProfile";
 import { FacialSymmetry } from "@/components/FacialSymmetry";
 import { FaceMuscleChart } from "@/components/FaceMuscleChart";
 import { SectionNotes } from "./components/SectionNotes";
+import { useSectionSave } from "@/hooks/useSectionSave";
 
 interface ExtraoralExamFormProps {
   chartId: string;
 }
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
-
 export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
+  const { show: showToast } = useToastStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-  
+  const { markDirty, markClean, registerSave } = useSectionSave("extraoral");
+
   const [formData, setFormData] = useState<ExtraoralExamUpdate>({
     facial_symmetry: "symmetry",
     facial_profile: "straight",
@@ -55,7 +47,8 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
     note: ""
   });
 
-  const debouncedData = useDebounce(formData, 1000);
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
 
   useEffect(() => {
     const fetchExam = async () => {
@@ -63,51 +56,41 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
         setLoading(true);
         const data = await extraoralExamService.getByChart(chartId);
         if (data) {
-          setFormData({
+          const mapped = {
             ...data,
-            muscle_pain: data.muscle_pain || [],
+            muscle_pain: Array.isArray(data.muscle_pain) ? data.muscle_pain : [],
             joint_pain: data.joint_pain || [],
             parafunctional_habit: data.parafunctional_habit || [],
             factors_affecting_tooth_wear: data.factors_affecting_tooth_wear || {},
             note: data.note || ""
-          });
+          };
+          setFormData(mapped);
         }
-        setInitialDataLoaded(true);
       } catch (err) {
         console.error("Failed to fetch extraoral exam:", err);
+        showToast("Failed to load extraoral exam.", "error");
       } finally {
         setLoading(false);
+        registerSave(async () => {
+          setSaving(true);
+          try {
+            await extraoralExamService.update(chartId, { ...formDataRef.current });
+          } catch (err) {
+            showToast("Failed to save extraoral exam.", "error");
+            throw err;
+          } finally {
+            setSaving(false);
+          }
+        });
+        markClean();
       }
     };
     fetchExam();
-  }, [chartId]);
-
-  useEffect(() => {
-    const saveData = async () => {
-      if (!initialDataLoaded) return;
-      try {
-        setSaving(true);
-        const payload: ExtraoralExamUpdate = { ...debouncedData };
-        try {
-          await extraoralExamService.update(chartId, payload);
-        } catch (updateErr: any) {
-          if (updateErr?.response?.status === 404) {
-            await extraoralExamService.create(chartId, payload as any);
-          } else {
-            throw updateErr;
-          }
-        }
-      } catch (err) {
-        console.error("Failed to save extraoral exam:", err);
-      } finally {
-        setSaving(false);
-      }
-    };
-    saveData();
-  }, [debouncedData, chartId, initialDataLoaded]);
+  }, [chartId, showToast, registerSave, markClean]);
 
   const updateField = (field: keyof ExtraoralExamUpdate, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    markDirty();
   };
 
   const toggleArrayField = (field: keyof ExtraoralExamUpdate, value: string) => {
@@ -118,6 +101,7 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
       }
       return { ...prev, [field]: [...arr, value] };
     });
+    markDirty();
   };
 
   const handleToggleToothWear = (factor: string) => {
@@ -131,6 +115,7 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
         }
       };
     });
+    markDirty();
   };
 
   if (loading) {

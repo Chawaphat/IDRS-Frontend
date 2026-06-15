@@ -4,8 +4,11 @@ import { HelpCircle, X, Loader2, ChevronRight, CheckCircle2, AlertTriangle } fro
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ToggleButtonGroup } from '@/components/ui/ToggleButton';
+import { occlusalAnalysisService, type OcclusalAnalysisPayload, type OcclusalContactType } from '@/services/occlusalAnalysisService';
+import { useToastStore } from '@/store/toastStore';
+import { useSectionSave } from '@/hooks/useSectionSave';
+import { SectionNotes } from '@/components/chart/components/SectionNotes';
 import {
   Tooltip,
   TooltipContent,
@@ -28,6 +31,58 @@ interface Pair {
   lower: number;
 }
 
+interface OcclusalAnalysisProps {
+  chartId: string;
+}
+
+const DEFAULT_SECTION_PAIRS: Record<ContactType, Pair[]> = {
+  premature: [], mip: [], protrusive: [], working: [], nonWorking: [],
+};
+
+const DEFAULT_ANGLE_CLASS = {
+  molarRight: 'Class I',
+  molarLeft: 'Class I',
+  canineRight: 'Class I',
+  canineLeft: 'Class I',
+};
+
+const DEFAULT_OVERLAPS = { horizontal: '', vertical: '' };
+const DEFAULT_CRMIP = { anteriorSlide: '', lateralDir: 'Right', lateralSlide: '' };
+
+const CONTACT_UI_TO_API: Record<ContactType, OcclusalContactType> = {
+  mip: 'mip',
+  premature: 'premature',
+  protrusive: 'protrusive',
+  working: 'working',
+  nonWorking: 'non_working',
+};
+
+const CONTACT_API_TO_UI: Record<OcclusalContactType, ContactType> = {
+  mip: 'mip',
+  premature: 'premature',
+  protrusive: 'protrusive',
+  working: 'working',
+  non_working: 'nonWorking',
+};
+
+const CLASS_UI_TO_API: Record<string, 'class_i' | 'class_ii' | 'class_iii'> = {
+  'Class I': 'class_i',
+  'Class II': 'class_ii',
+  'Class III': 'class_iii',
+};
+
+const CLASS_API_TO_UI: Record<string, string> = {
+  class_i: 'Class I',
+  class_ii: 'Class II',
+  class_iii: 'Class III',
+};
+
+const toNullableNumber = (value: string): number | null => {
+  if (value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const CONTACT_SECTIONS: { id: ContactType; label: string; fullLabel: string }[] = [
   { id: 'mip', label: 'MIP contact', fullLabel: 'Maximum Intercuspation' },
   { id: 'premature', label: 'Premature contact', fullLabel: 'Premature contact' },
@@ -48,28 +103,132 @@ const MOCK_EXPLANATIONS: Record<ContactType, string> = {
 };
 
 // --- Component ---
-export default function OcclusalAnalysis() {
+export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
+  const { show: showToast } = useToastStore();
   const [activeTab, setActiveTab] = useState<ContactType>('mip');
 
-  const [sectionPairs, setSectionPairs] = useState<Record<ContactType, Pair[]>>({
-    premature: [], mip: [], protrusive: [], working: [], nonWorking: [],
-  });
+  const [sectionPairs, setSectionPairs] = useState<Record<ContactType, Pair[]>>(DEFAULT_SECTION_PAIRS);
 
   const [activeSelection, setActiveSelection] = useState<{ id: number; jaw: 'upper' | 'lower' } | null>(null);
   const [hoveredPair, setHoveredPair] = useState<Pair | null>(null);
 
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingHelp, setLoadingHelp] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { markDirty, markClean, registerSave } = useSectionSave("occlusal");
 
   // Additional Measurements State
-  const [angleClass, setAngleClass] = useState({ molarRight: 'Class I', molarLeft: 'Class I', canineRight: 'Class I', canineLeft: 'Class I' });
-  const [overlaps, setOverlaps] = useState({ horizontal: '', vertical: '' });
-  const [crmip, setCrmip] = useState({ anteriorSlide: '', lateralDir: 'Right', lateralSlide: '' });
+  const [angleClass, setAngleClass] = useState(DEFAULT_ANGLE_CLASS);
+  const [overlaps, setOverlaps] = useState(DEFAULT_OVERLAPS);
+  const [crmip, setCrmip] = useState(DEFAULT_CRMIP);
+  const [note, setNote] = useState('');
+
+  const saveState = React.useMemo(() => ({
+    sectionPairs,
+    angleClass,
+    overlaps,
+    crmip,
+    note,
+  }), [sectionPairs, angleClass, overlaps, crmip, note]);
+
+  const saveStateRef = useRef(saveState);
+  useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
+
 
   // Refs for Line Drawing
   const containerRef = useRef<HTMLDivElement | null>(null);
   const toothRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const [lineCoords, setLineCoords] = useState<{ x1: number; y1: number; x2: number; y2: number; upperId: number; lowerId: number }[]>([]);
+
+  useEffect(() => {
+    const fetchOcclusalAnalysis = async () => {
+      if (!chartId) return;
+      try {
+        setLoading(true);
+        const data = await occlusalAnalysisService.get(chartId);
+        if (!data) return;
+
+        const nextPairs: Record<ContactType, Pair[]> = {
+          premature: [], mip: [], protrusive: [], working: [], nonWorking: [],
+        };
+
+        Object.entries(data.contacts || {}).forEach(([contactType, pairs]) => {
+          const uiType = CONTACT_API_TO_UI[contactType as OcclusalContactType];
+          if (!uiType) return;
+          
+          const uniquePairs: Pair[] = [];
+          pairs.forEach(pair => {
+            if (!uniquePairs.find(p => p.upper === pair.upper_tooth && p.lower === pair.lower_tooth)) {
+              uniquePairs.push({
+                upper: pair.upper_tooth,
+                lower: pair.lower_tooth,
+              });
+            }
+          });
+          nextPairs[uiType] = uniquePairs;
+        });
+
+        setSectionPairs(nextPairs);
+        setAngleClass({
+          molarRight: data.right_molar ? CLASS_API_TO_UI[data.right_molar] || 'Class I' : 'Class I',
+          molarLeft: data.left_molar ? CLASS_API_TO_UI[data.left_molar] || 'Class I' : 'Class I',
+          canineRight: data.canine_right ? CLASS_API_TO_UI[data.canine_right] || 'Class I' : 'Class I',
+          canineLeft: data.canine_left ? CLASS_API_TO_UI[data.canine_left] || 'Class I' : 'Class I',
+        });
+        setOverlaps({
+          horizontal: data.overlap_horizontal?.toString() || '',
+          vertical: data.overlap_vertical?.toString() || '',
+        });
+        setCrmip({
+          anteriorSlide: data.anterior_slide?.toString() || '',
+          lateralSlide: data.lateral_slide?.toString() || '',
+          lateralDir: data.lateral_direction === 'left' ? 'Left' : 'Right',
+        });
+        setNote(data.note || '');
+      } catch (err) {
+        console.error('Failed to fetch occlusal analysis', err);
+        showToast('Failed to load occlusal analysis.', 'error');
+      } finally {
+        setLoading(false);
+        registerSave(async () => {
+          const s = saveStateRef.current;
+          setSaving(true);
+          try {
+            const payload: OcclusalAnalysisPayload = {
+              right_molar: CLASS_UI_TO_API[s.angleClass.molarRight] || null,
+              left_molar: CLASS_UI_TO_API[s.angleClass.molarLeft] || null,
+              canine_right: CLASS_UI_TO_API[s.angleClass.canineRight] || null,
+              canine_left: CLASS_UI_TO_API[s.angleClass.canineLeft] || null,
+              overlap_horizontal: toNullableNumber(s.overlaps.horizontal),
+              overlap_vertical: toNullableNumber(s.overlaps.vertical),
+              anterior_slide: toNullableNumber(s.crmip.anteriorSlide),
+              lateral_slide: toNullableNumber(s.crmip.lateralSlide),
+              lateral_direction: s.crmip.lateralDir === 'Left' ? 'left' : 'right',
+              note: s.note || null,
+            };
+            const contacts = Object.entries(s.sectionPairs).flatMap(([type, pairs]) =>
+              pairs.map(pair => ({
+                contact_type: CONTACT_UI_TO_API[type as ContactType],
+                upper_tooth: pair.upper,
+                lower_tooth: pair.lower,
+              })),
+            );
+            await occlusalAnalysisService.upsert(chartId, payload);
+            await occlusalAnalysisService.replaceContacts(chartId, contacts);
+          } catch (err) {
+            showToast('Failed to save occlusal analysis.', 'error');
+            throw err;
+          } finally {
+            setSaving(false);
+          }
+        });
+        markClean();
+      }
+    };
+
+    fetchOcclusalAnalysis();
+  }, [chartId, showToast, registerSave, markClean]);
 
   // --- Handlers ---
   const handleHelpClick = async (type: ContactType, e: React.MouseEvent) => {
@@ -93,6 +252,16 @@ export default function OcclusalAnalysis() {
     setHoveredPair(null);
   };
 
+  const handleClearAll = () => {
+    setSectionPairs({ premature: [], mip: [], protrusive: [], working: [], nonWorking: [] });
+    setAngleClass(DEFAULT_ANGLE_CLASS);
+    setOverlaps(DEFAULT_OVERLAPS);
+    setCrmip(DEFAULT_CRMIP);
+    setActiveSelection(null);
+    setHoveredPair(null);
+    markDirty();
+  };
+
   const onToothClick = (id: number, jaw: 'upper' | 'lower') => {
     if (!activeSelection || activeSelection.jaw === jaw) {
       setActiveSelection({ id, jaw });
@@ -108,6 +277,7 @@ export default function OcclusalAnalysis() {
         ...prev,
         [activeTab]: [...prev[activeTab], { upper, lower }]
       }));
+      markDirty();
     }
 
     setActiveSelection(null);
@@ -121,6 +291,7 @@ export default function OcclusalAnalysis() {
     if (hoveredPair?.upper === pair.upper && hoveredPair?.lower === pair.lower) {
       setHoveredPair(null);
     }
+    markDirty();
   };
 
   const checkInterference = (tab: string, upper: number, lower: number) => {
@@ -169,14 +340,37 @@ export default function OcclusalAnalysis() {
   }, [sectionPairs, activeTab]);
 
   useEffect(() => {
-    updateLines();
     window.addEventListener('resize', updateLines);
-    const timer = setTimeout(updateLines, 50);
+
+    // Observe container becoming visible (hidden → block in PatientDetail)
+    // getBoundingClientRect returns 0 while parent is display:none, so we
+    // re-measure as soon as the container has a non-zero width.
+    const container = containerRef.current;
+    let ro: ResizeObserver | null = null;
+    if (container) {
+      ro = new ResizeObserver(() => {
+        if (container.getBoundingClientRect().width > 0) {
+          requestAnimationFrame(updateLines);
+        }
+      });
+      ro.observe(container);
+    }
+
+    requestAnimationFrame(updateLines);
+
     return () => {
       window.removeEventListener('resize', updateLines);
-      clearTimeout(timer);
+      ro?.disconnect();
     };
   }, [updateLines]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-20 text-teal-600">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     // เปลี่ยนจาก max-w-7xl เป็น max-w-6xl และเพิ่ม px-4 เพื่อไม่ให้ชิดขอบจอเกินไปในมือถือ
@@ -188,12 +382,20 @@ export default function OcclusalAnalysis() {
           <h1 className="text-3xl font-bold text-slate-900">Occlusal Analysis</h1>
           <p className="text-slate-500">Select a contact type on the left, then map tooth interactions on the right.</p>
         </div>
-        <button
-          onClick={() => setSectionPairs({ premature: [], mip: [], protrusive: [], working: [], nonWorking: [] })}
-          className="h-10 px-4 rounded-xl text-sm font-bold border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-colors shadow-sm shrink-0 w-full sm:w-auto"
-        >
-          Clear All Analysis
-        </button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          {saving && (
+            <span className="text-sm text-slate-400 italic flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+              Saving...
+            </span>
+          )}
+          <button
+            onClick={handleClearAll}
+            className="h-10 px-4 rounded-xl text-sm font-bold border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-colors shadow-sm shrink-0 w-full sm:w-auto"
+          >
+            Clear All Analysis
+          </button>
+        </div>
       </div>
 
       <TooltipProvider>
@@ -268,7 +470,7 @@ export default function OcclusalAnalysis() {
               </h2>
               {sectionPairs[activeTab].length > 0 && (
                 <button
-                  onClick={() => setSectionPairs(prev => ({ ...prev, [activeTab]: [] }))}
+                  onClick={() => { setSectionPairs(prev => ({ ...prev, [activeTab]: [] })); markDirty(); }}
                   className="px-3 py-1.5 w-max rounded-lg text-xs font-semibold border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
                 >
                   Clear this section
@@ -297,14 +499,13 @@ export default function OcclusalAnalysis() {
                     const pathData = `M ${line.x1} ${line.y1} C ${line.x1} ${line.y1 + curveOffset}, ${line.x2} ${line.y2 - curveOffset}, ${line.x2} ${line.y2}`;
 
                     return (
-                      <g key={i} className="transition-all duration-300 ease-in-out" style={{ opacity }}>
+                      <g key={i} className="transition-opacity duration-300 ease-in-out" style={{ opacity }}>
                         <path
                           d={pathData}
                           fill="none"
                           stroke={drawColor}
                           strokeWidth={strokeWidth}
                           strokeDasharray={isInterf ? "3 3" : undefined}
-                          className={cn("animate-in fade-in duration-500")}
                         />
                         <circle cx={line.x1} cy={line.y1} r={isHovered ? 4 : 2.5} fill={drawColor} />
                         <circle cx={line.x2} cy={line.y2} r={isHovered ? 4 : 2.5} fill={drawColor} />
@@ -504,7 +705,7 @@ export default function OcclusalAnalysis() {
                 <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Right first molar</Label>
                 <ToggleButtonGroup
                   value={angleClass.molarRight}
-                  onChange={(v: string) => setAngleClass(prev => ({ ...prev, molarRight: v }))}
+                  onChange={(v: string) => { setAngleClass(prev => ({ ...prev, molarRight: v })); markDirty(); }}
                   options={[
                     { value: 'Class I', label: 'Class I' },
                     { value: 'Class II', label: 'Class II' },
@@ -517,7 +718,7 @@ export default function OcclusalAnalysis() {
                 <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Left first molar</Label>
                 <ToggleButtonGroup
                   value={angleClass.molarLeft}
-                  onChange={(v: string) => setAngleClass(prev => ({ ...prev, molarLeft: v }))}
+                  onChange={(v: string) => { setAngleClass(prev => ({ ...prev, molarLeft: v })); markDirty(); }}
                   options={[
                     { value: 'Class I', label: 'Class I' },
                     { value: 'Class II', label: 'Class II' },
@@ -530,7 +731,7 @@ export default function OcclusalAnalysis() {
                 <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Right Canine (k9)</Label>
                 <ToggleButtonGroup
                   value={angleClass.canineRight}
-                  onChange={(v: string) => setAngleClass(prev => ({ ...prev, canineRight: v }))}
+                  onChange={(v: string) => { setAngleClass(prev => ({ ...prev, canineRight: v })); markDirty(); }}
                   options={[
                     { value: 'Class I', label: 'Class I' },
                     { value: 'Class II', label: 'Class II' },
@@ -543,7 +744,7 @@ export default function OcclusalAnalysis() {
                 <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Left Canine (k9)</Label>
                 <ToggleButtonGroup
                   value={angleClass.canineLeft}
-                  onChange={(v: string) => setAngleClass(prev => ({ ...prev, canineLeft: v }))}
+                  onChange={(v: string) => { setAngleClass(prev => ({ ...prev, canineLeft: v })); markDirty(); }}
                   options={[
                     { value: 'Class I', label: 'Class I' },
                     { value: 'Class II', label: 'Class II' },
@@ -569,7 +770,7 @@ export default function OcclusalAnalysis() {
                     <Input
                       type="number"
                       value={overlaps.horizontal}
-                      onChange={e => setOverlaps(prev => ({ ...prev, horizontal: e.target.value }))}
+                      onChange={e => { setOverlaps(prev => ({ ...prev, horizontal: e.target.value })); markDirty(); }}
                       className="bg-white border-slate-200 text-slate-800 h-12 rounded-xl focus:ring-teal-500 pr-10 shadow-sm"
                       placeholder="e.g. 2"
                     />
@@ -582,7 +783,7 @@ export default function OcclusalAnalysis() {
                     <Input
                       type="number"
                       value={overlaps.vertical}
-                      onChange={e => setOverlaps(prev => ({ ...prev, vertical: e.target.value }))}
+                      onChange={e => { setOverlaps(prev => ({ ...prev, vertical: e.target.value })); markDirty(); }}
                       className="bg-white border-slate-200 text-slate-800 h-12 rounded-xl focus:ring-teal-500 pr-10 shadow-sm"
                       placeholder="e.g. 2"
                     />
@@ -602,20 +803,20 @@ export default function OcclusalAnalysis() {
                 <div className="space-y-3">
                   <Label className="text-slate-700 font-semibold">Anterior slide</Label>
                   <div className="relative">
-                    <Input type="number" step="0.1" value={crmip.anteriorSlide} onChange={e => setCrmip(prev => ({ ...prev, anteriorSlide: e.target.value }))} className="bg-white border-slate-200 text-slate-800 h-12 rounded-xl focus:ring-teal-500 pr-10 shadow-sm" placeholder="0.0" />
+                    <Input type="number" step="0.1" value={crmip.anteriorSlide} onChange={e => { setCrmip(prev => ({ ...prev, anteriorSlide: e.target.value })); markDirty(); }} className="bg-white border-slate-200 text-slate-800 h-12 rounded-xl focus:ring-teal-500 pr-10 shadow-sm" placeholder="0.0" />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">mm</span>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <Label className="text-slate-700 font-semibold">Lateral slide</Label>
                   <div className="relative">
-                    <Input type="number" step="0.1" value={crmip.lateralSlide} onChange={e => setCrmip(prev => ({ ...prev, lateralSlide: e.target.value }))} className="bg-white border-slate-200 text-slate-800 h-12 rounded-xl focus:ring-teal-500 pr-10 shadow-sm" placeholder="0.0" />
+                    <Input type="number" step="0.1" value={crmip.lateralSlide} onChange={e => { setCrmip(prev => ({ ...prev, lateralSlide: e.target.value })); markDirty(); }} className="bg-white border-slate-200 text-slate-800 h-12 rounded-xl focus:ring-teal-500 pr-10 shadow-sm" placeholder="0.0" />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">mm</span>
                   </div>
                   <div className="pt-2">
                     <ToggleButtonGroup
                       value={crmip.lateralDir}
-                      onChange={(v: string) => setCrmip(prev => ({ ...prev, lateralDir: v }))}
+                      onChange={(v: string) => { setCrmip(prev => ({ ...prev, lateralDir: v })); markDirty(); }}
                       options={[
                         { value: 'Right', label: 'Right' },
                         { value: 'Left', label: 'Left' }
@@ -629,6 +830,12 @@ export default function OcclusalAnalysis() {
           </div>
         </div>
       </div>
+
+      <SectionNotes
+        sectionId="occlusal"
+        value={note}
+        onChange={(val) => { setNote(val); markDirty(); }}
+      />
     </div>
   );
 }

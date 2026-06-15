@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Stethoscope, ArrowLeft, Mail, Lock, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
+import { authService } from '@/services/authService';
 
 interface AuthPageProps {
   mode: 'login' | 'register';
@@ -246,45 +246,10 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
 
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        if (error) {
-          if (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('Network')) {
-            throw new Error('Network connection error'); // SRS-12
-          }
-          if (error.message.toLowerCase().includes('invalid login credentials')) {
-            setPassword(''); // SRS-11
-            throw new Error('Invalid email or password'); // SRS-10
-          }
-          throw error;
-        }
-        
-        // Success SRS-05, SRS-06
-        // Toast and redirect are now handled instantly by App.tsx PublicRoute
+        await authService.signIn(email, password);
+        // Toast and redirect handled by App.tsx PublicRoute
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              first_name: firstName,
-              last_name: lastName,
-              full_name: `${firstName} ${lastName}`.trim()
-            }
-          }
-        });
-        if (error) {
-          if (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('Network')) {
-            throw new Error('Network connection error'); // SRS-14
-          }
-          if (error.message.toLowerCase().includes('already registered') || error.status === 422) {
-             throw new Error('Email is already registered'); // SRS-13
-          }
-          throw error;
-        }
-        // Success: SRS-04 & SRS-05
+        await authService.signUp(email, password, firstName, lastName);
         setSuccessMsg('Registered Successfully');
         setMode('login');
         setFirstName('');
@@ -304,18 +269,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
     setErrorMsg(null);
     setAuthLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + '/auth/login'
-        }
-      });
-      if (error) {
-        if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
-          throw new Error('Network connection error'); // SRS-14
-        }
-        throw error;
-      }
+      await authService.signInWithGoogle();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Google Auth redirection failed.';
       setErrorMsg(errorMsg);

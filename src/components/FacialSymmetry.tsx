@@ -21,8 +21,8 @@ export const FacialSymmetry: React.FC<FacialSymmetryProps> = ({ value, onChange 
                 
                 <div className="grid grid-cols-2 gap-3">
                     {[
-                        { id: 'symmetry', label: 'Symmetry', sub: 'หน้าสมมาตร', img: symmetryImg },
-                        { id: 'asymmetry', label: 'Asymmetry', sub: 'หน้าไม่สมมาตร', img: asymmetryImg }
+                        { id: 'symmetry', label: 'Symmetry', sub: 'Balanced facial proportions', img: symmetryImg },
+                        { id: 'asymmetry', label: 'Asymmetry', sub: 'Unequal facial proportions', img: asymmetryImg }
                     ].map(opt => {
                         const isSelected = value === opt.id;
                         return (
@@ -62,9 +62,9 @@ export const FacialSymmetry: React.FC<FacialSymmetryProps> = ({ value, onChange 
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                     {[
-                        { label: 'Vertical', sub: 'แนวนอนเบี้ยว', img: verticalImg },
-                        { label: 'Horizontal', sub: 'แนวตั้งเบี้ยว', img: horizontalImg },
-                        { label: 'Mixture', sub: 'ทั้งสองแนว', img: mixtureImg },
+                        { label: 'Vertical', sub: 'Left–right deviation', img: verticalImg },
+                        { label: 'Horizontal', sub: 'Up–down deviation', img: horizontalImg },
+                        { label: 'Mixture', sub: 'Both axes', img: mixtureImg },
                     ].map((ref, idx) => (
                         <div key={idx} className="flex flex-col items-center justify-center gap-1.5 select-none pointer-events-none opacity-70 grayscale-[20%]">
                             <div className="h-24 w-full relative flex items-center justify-center overflow-hidden mb-1">
