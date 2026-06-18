@@ -311,7 +311,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
         </div>
 
         <div className="md:col-span-7 p-8 flex flex-col justify-center">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
             
             {mode === 'register' && (
               <div className="grid grid-cols-2 gap-4">

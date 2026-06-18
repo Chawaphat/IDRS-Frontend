@@ -102,14 +102,15 @@ export const authService = {
     }
 
     // If Supabase confirms the session immediately (no email verification),
-    // create the backend profile right away.
+    // create the backend profile then sign out so Auth.tsx can show
+    // "Registered Successfully" and stay on the Login form (SRS-14/15).
     if (data.session) {
       try {
         await authService.registerProfile({ full_name: fullName });
       } catch {
-        // Profile registration is best-effort here; the auth state change listener
-        // in authStore will retry when the session is established.
+        // Profile registration is best-effort here.
       }
+      await supabase.auth.signOut();
     }
 
     return data;

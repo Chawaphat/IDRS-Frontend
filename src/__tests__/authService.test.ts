@@ -8,6 +8,7 @@ vi.mock('@/lib/supabase', () => ({
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
       signInWithOAuth: vi.fn(),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
     },
   },
 }));
@@ -27,6 +28,7 @@ import api from '@/lib/api';
 const mockSignInWithPassword = vi.mocked(supabase.auth.signInWithPassword);
 const mockSignUp = vi.mocked(supabase.auth.signUp);
 const mockSignInWithOAuth = vi.mocked(supabase.auth.signInWithOAuth);
+const mockSignOut = vi.mocked(supabase.auth.signOut);
 const mockApiPost = vi.mocked(api.post);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ describe('UTC-02: authService.signUp', () => {
       }),
     );
     expect(mockApiPost).toHaveBeenCalledWith('/auth/register-profile', { full_name: 'John Doe' });
+    expect(mockSignOut).toHaveBeenCalledOnce();
     expect(result).toEqual({ user: mockUser, session: mockSession });
   });
 
@@ -206,5 +209,19 @@ describe('UTC-03: authService.signInWithGoogle', () => {
 
     await expect(authService.signInWithGoogle()).rejects.toThrow('OAuth provider unavailable');
     await expect(authService.signInWithGoogle()).rejects.not.toThrow('Network connection error');
+  });
+
+  // UTC-03-TC-03b
+  it('TC-03b: does NOT wrap non-network errors as "Network connection error"', async () => {
+    const originalError = new Error('OAuth provider unavailable');
+    mockSignInWithOAuth.mockResolvedValueOnce({
+      data: null,
+      error: originalError,
+    } as never);
+
+    const err = await authService.signInWithGoogle().catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('OAuth provider unavailable');
+    expect((err as Error).message).not.toBe('Network connection error');
   });
 });

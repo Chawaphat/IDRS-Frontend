@@ -102,8 +102,7 @@ export default function SettingsPage() {
         try {
           await signOut();
         } catch (err: unknown) {
-          const errMsg = err instanceof Error ? err.message : "Failed to sign out";
-          showToast(errMsg, 'error');
+          showToast("Network connection error. Cannot log out at this time.", 'error');
         }
       }
     });
