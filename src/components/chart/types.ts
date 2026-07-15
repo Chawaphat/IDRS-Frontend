@@ -106,6 +106,7 @@ export const DEFAULT_STATE: FormState = {
 export const sectionNames: Record<string, string> = {
     images: 'Images',
     patientHistory: 'Patient History',
+    imageGallery: 'Image Gallery',
     extraoral: 'Extraoral Exam',
     esthetic: 'Esthetic Evaluation',
     vdo: 'VDO Evaluation',

@@ -35,6 +35,7 @@ import EstheticEvaluation from '@/components/chart/EstheticEvaluation';
 import VdoEvaluationForm from '@/components/chart/VdoEvaluationForm';
 import DentalStatusForm from '@/components/chart/DentalStatusForm';
 import ResidualRidgeAssessmentForm from '@/components/chart/ResidualRidgeAssessmentForm';
+import ImageGallerySection from '@/components/chart/ImageGallerySection';
 import { DEFAULT_STATE, sectionNames } from '@/components/chart/types';
 import type { FormState } from '@/components/chart/types';
 
@@ -42,6 +43,7 @@ import type { FormState } from '@/components/chart/types';
 
 const SECTIONS = [
     { id: 'patientHistory', title: 'Patient History' },
+    { id: 'imageGallery', title: 'Image Gallery' },
     { id: 'extraoral', title: 'Extraoral Exam' },
     { id: 'esthetic', title: 'Esthetic Evaluation' },
     { id: 'vdo', title: 'VDO Evaluation' },
@@ -325,7 +327,14 @@ export default function SequentialPatientPage() {
                         </div>
                     )}
 
-                    {/* 3. Extraoral Exam Form */}
+                    {/* 3. Image Gallery */}
+                    {chartId && (
+                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === "imageGallery" ? "block" : "hidden")}>
+                            <ImageGallerySection chartId={chartId} />
+                        </div>
+                    )}
+
+                    {/* 4. Extraoral Exam Form */}
                     {chartId && (
                         <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === "extraoral" ? "block" : "hidden")}>
                             <ExtraoralExamForm chartId={chartId} />
