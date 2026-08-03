@@ -74,7 +74,7 @@ export const patientService = {
 export interface ImageManagement {
   image_id: string;
   chart_id: string;
-  image_type: 'intraoral' | 'panoramic';
+  image_type: 'intraoral' | 'panoramic_xray' | 'other';
   image_url?: string;
   image_file?: string;
   description?: string;
