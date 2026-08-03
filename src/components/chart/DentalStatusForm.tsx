@@ -16,6 +16,7 @@ import {
   odontogramSnapshotToDentalStatus,
 } from "./dentalStatusMapper";
 import { useSectionSave } from "@/hooks/useSectionSave";
+import { API_BASE_URL } from "@/lib/apiBaseUrl";
 
 interface DentalStatusFormProps {
   chartId: string;
@@ -57,7 +58,7 @@ export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
       const token = useAuthStore.getState().session?.access_token;
       if (!token) return;
 
-      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/dental-charts/${chartIdRef.current}/dental-status`;
+      const url = `${API_BASE_URL}/dental-charts/${chartIdRef.current}/dental-status`;
       fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
