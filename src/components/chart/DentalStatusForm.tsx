@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, RefreshCw, Save, Sparkles } from "lucide-react";
 import OdontogramUI from "@/components/odontogram/OdontogramUI";
 import {
   getOdontogramStatusSnapshot,
@@ -8,7 +8,11 @@ import {
   type OdontogramStatusSnapshot,
 } from "@/components/odontogram/odontogram";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { dentalStatusService } from "@/services/dentalStatusService";
+import type { AITooth } from "@/services/aiDetectionService";
+import { imageManagementService } from "@/services/imageManagementService";
+import { useAiDetectionStore } from "@/store/aiDetectionStore";
 import { useToastStore } from "@/store/toastStore";
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -21,12 +25,47 @@ interface DentalStatusFormProps {
   chartId: string;
 }
 
+// Read-only condition styling — badges in the finding table and the
+// borders drawn over the X-ray share the same disease → color mapping.
+const CONDITION_BADGE: Record<string, string> = {
+  "caries": "bg-amber-50 text-amber-700 border-amber-200",
+  "deep caries": "bg-orange-50 text-orange-700 border-orange-200",
+  "periapical lesion": "bg-rose-50 text-rose-700 border-rose-200",
+  "impacted": "bg-violet-50 text-violet-700 border-violet-200",
+};
+const CONDITION_BORDER: Record<string, string> = {
+  "caries": "border-amber-400",
+  "deep caries": "border-orange-500",
+  "periapical lesion": "border-rose-500",
+  "impacted": "border-violet-500",
+};
+
+function conditionBadge(disease: string): string {
+  return CONDITION_BADGE[disease.toLowerCase()] ?? "bg-slate-50 text-slate-700 border-slate-200";
+}
+function conditionBorder(disease?: string): string {
+  if (!disease) return "border-slate-400";
+  return CONDITION_BORDER[disease.toLowerCase()] ?? "border-slate-400";
+}
+
 export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
   const { show: showToast } = useToastStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusId, setStatusId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState(false);
+
+  // AI findings from panoramic X-ray analyses — display only, no chart
+  // writes and no approval step; the dentist reads it like a note. Pulled
+  // from the shared store so a detection kicked off from Image Gallery
+  // (which stays mounted, just hidden, when this section is active) shows
+  // up here as soon as it finishes, without needing a page refresh.
+  const aiAnalyses = useAiDetectionStore(
+    useCallback((s) => s.analysesByChart[chartId] ?? [], [chartId])
+  );
+  const fetchAiAnalyses = useAiDetectionStore((s) => s.fetchForChart);
+  const [aiImageUrls, setAiImageUrls] = useState<Record<string, string>>({});
+  const [aiDetailOpen, setAiDetailOpen] = useState(false);
 
   const { markDirty, markClean, registerSave } = useSectionSave("dentalStatus");
 
@@ -41,6 +80,47 @@ export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
 
   useEffect(() => { chartIdRef.current = chartId; }, [chartId]);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
+
+  // Load AI analyses for this chart (from the shared store — see comment
+  // above) in case this page mounted before Image Gallery ever fetched them.
+  useEffect(() => {
+    fetchAiAnalyses(chartId).catch((err) => console.error("Failed to load AI analysis:", err));
+  }, [chartId, fetchAiAnalyses]);
+
+  // Current signed image URLs (the URL saved inside detection_data can have
+  // expired since the analysis ran; the images endpoint always returns a
+  // fresh one for the same file). Re-runs whenever the analysis list grows
+  // so a newly uploaded X-ray's URL is picked up too.
+  useEffect(() => {
+    let cancelled = false;
+    imageManagementService
+      .getByChart(chartId)
+      .then((images) => {
+        if (cancelled) return;
+        const urlMap: Record<string, string> = {};
+        for (const image of images) {
+          if (image.image_url) urlMap[image.image_id] = image.image_url;
+        }
+        setAiImageUrls(urlMap);
+      })
+      .catch((err) => console.error("Failed to load image URLs:", err));
+    return () => { cancelled = true; };
+  }, [chartId, aiAnalyses.length]);
+
+  // Most recently run panoramic X-ray analysis. Its detection_data.teeth
+  // already covers every segmented tooth (healthy ones included, not just
+  // the ones with a finding) — that full list is what gets rendered below.
+  const latestAnalysis = aiAnalyses[aiAnalyses.length - 1];
+  const aiTeeth = useMemo<AITooth[]>(() => {
+    const teeth = latestAnalysis?.detection_data?.teeth ?? [];
+    return [...teeth].sort((a, b) => a.tooth_fdi - b.tooth_fdi);
+  }, [latestAnalysis]);
+  const aiFindingCount = aiTeeth.filter((t) => !t.is_healthy).length;
+  const aiHealthyCount = aiTeeth.length - aiFindingCount;
+  const aiImageSrc = latestAnalysis
+    ? aiImageUrls[latestAnalysis.image_id] ?? latestAnalysis.detection_data.image
+    : undefined;
+  const aiImageSize = latestAnalysis?.detection_data.image_size;
 
   // keepalive flush on tab/browser close only — NOT on section switch/unmount,
   // because section-switch saves go through the UnsavedChangesDialog (explicit user action).
@@ -187,6 +267,94 @@ export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
           )}
         </div>
       </div>
+
+      {latestAnalysis && (
+        <div className="mb-4 overflow-hidden rounded-xl border border-teal-100 bg-teal-50/40">
+          <button
+            type="button"
+            onClick={() => setAiDetailOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-bold text-teal-700">
+              <Sparkles className="h-3.5 w-3.5" />
+              AI analysis — panoramic X-ray
+            </span>
+            <span className="flex items-center gap-2 text-[11px] font-semibold text-teal-700">
+              {aiTeeth.length} teeth · {aiFindingCount} finding{aiFindingCount !== 1 ? "s" : ""} · {aiHealthyCount} normal
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", aiDetailOpen && "rotate-180")} />
+            </span>
+          </button>
+
+          {aiDetailOpen && (
+            <div className="grid gap-4 border-t border-teal-100 bg-white p-4 md:grid-cols-[1.2fr_1fr]">
+              {/* Annotated X-ray — every segmented tooth outlined, findings in color */}
+              <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-900">
+                {aiImageSrc && (
+                  <img src={aiImageSrc} alt="Panoramic X-ray with AI overlay" className="block h-auto w-full" />
+                )}
+                {aiImageSize && aiTeeth.map((tooth) => {
+                  const [x1, y1, x2, y2] = tooth.bbox;
+                  const primaryDisease = tooth.diseases[0]?.disease;
+                  return (
+                    <div
+                      key={tooth.tooth_fdi}
+                      title={`Tooth ${tooth.tooth_fdi} · ${tooth.is_healthy ? "normal" : tooth.diseases.map((d) => d.disease).join(", ")}`}
+                      className={cn(
+                        "absolute rounded-[3px] border",
+                        tooth.is_healthy ? "border-teal-300/60" : cn(conditionBorder(primaryDisease), "border-2")
+                      )}
+                      style={{
+                        left: `${(x1 / aiImageSize.width) * 100}%`,
+                        top: `${(y1 / aiImageSize.height) * 100}%`,
+                        width: `${((x2 - x1) / aiImageSize.width) * 100}%`,
+                        height: `${((y2 - y1) / aiImageSize.height) * 100}%`,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Every detected tooth — normal ones included, not just findings */}
+              <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Tooth</th>
+                      <th className="px-3 py-2 font-semibold">Finding</th>
+                      <th className="px-3 py-2 text-right font-semibold">Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiTeeth.map((tooth) => (
+                      <tr key={tooth.tooth_fdi} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-mono font-bold text-slate-700">{tooth.tooth_fdi}</td>
+                        <td className="px-3 py-2">
+                          {tooth.is_healthy ? (
+                            <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-semibold text-teal-700">
+                              Normal
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {tooth.diseases.map((d, i) => (
+                                <span key={i} className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", conditionBadge(d.disease))}>
+                                  {d.disease}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
+                          {tooth.is_healthy ? "—" : tooth.diseases.map((d) => `${Math.round(d.confidence * 100)}%`).join(", ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="relative h-[calc(100%-3.5rem)] min-h-[660px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <OdontogramUI />

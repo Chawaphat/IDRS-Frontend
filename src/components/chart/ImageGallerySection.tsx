@@ -11,6 +11,7 @@ import {
   ScanLine,
   FileImage,
   FolderOpen,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ import { useToastStore } from "@/store/toastStore";
 import { imageManagementService } from "@/services/imageManagementService";
 import type { ImageCategory } from "@/services/imageManagementService";
 import type { ImageManagement } from "@/services/patientService";
+import { aiDetectionService } from "@/services/aiDetectionService";
+import { useAiDetectionStore } from "@/store/aiDetectionStore";
 import { format, parseISO } from "date-fns";
 
 interface ImageGallerySectionProps {
@@ -49,6 +52,16 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
   const [confirmDeleteImage, setConfirmDeleteImage] = useState<ImageManagement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // AI detection (panoramic X-ray only) — shared store so a result that
+  // finishes here shows up on the Dental Status page immediately, even
+  // though that component stayed mounted (just hidden) the whole time.
+  const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
+  const aiAnalyses = useAiDetectionStore(
+    useCallback((s) => s.analysesByChart[chartId] ?? [], [chartId])
+  );
+  const fetchAiAnalyses = useAiDetectionStore((s) => s.fetchForChart);
+  const addAiAnalysis = useAiDetectionStore((s) => s.addAnalysis);
+
   // Fetch images
   const fetchImages = useCallback(async () => {
     try {
@@ -66,11 +79,46 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await fetchImages();
+      await Promise.all([fetchImages(), fetchAiAnalyses(chartId)]);
       setLoading(false);
     };
     load();
-  }, [fetchImages]);
+  }, [fetchImages, fetchAiAnalyses, chartId]);
+
+  // Latest AI analysis for a given image, if any
+  const getAnalysisForImage = useCallback(
+    (imageId: string) => {
+      const matches = aiAnalyses.filter((a) => a.image_id === imageId);
+      return matches[matches.length - 1];
+    },
+    [aiAnalyses]
+  );
+
+  // Run AI detection in the background — does not block the upload flow.
+  // Inference (model load + segmentation + detection) can take a while, so
+  // the card shows an "Analyzing…" state instead of holding up the upload.
+  const runAiDetection = useCallback(
+    (imageId: string) => {
+      setAnalyzingIds((prev) => new Set(prev).add(imageId));
+      aiDetectionService
+        .create(chartId, imageId)
+        .then((analysis) => {
+          addAiAnalysis(chartId, analysis);
+        })
+        .catch((err) => {
+          console.error("AI detection failed:", err);
+          showToast("AI analysis failed for this X-ray.", "error");
+        })
+        .finally(() => {
+          setAnalyzingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(imageId);
+            return next;
+          });
+        });
+    },
+    [chartId, showToast, addAiAnalysis]
+  );
 
   // Filtered images for active category
   const filteredImages = images.filter((img) => img.image_type === activeCategory);
@@ -108,7 +156,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
         setUploadProgress(70);
 
         // 2. Register metadata in backend
-        await imageManagementService.create(chartId, {
+        const created = await imageManagementService.create(chartId, {
           image_type: activeCategory,
           image_file: fileName,
           description: description.trim() || undefined,
@@ -119,6 +167,12 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
         await fetchImages();
         setDescription("");
         showToast("Image uploaded successfully!", "success");
+
+        // 4. Panoramic X-rays go straight into AI detection — runs in the
+        // background so it doesn't hold up the upload UI.
+        if (activeCategory === "panoramic_xray") {
+          runAiDetection(created.image_id);
+        }
       } catch (err: any) {
         const errorDetail = err?.response?.data?.detail || err?.message || "Failed to upload image. Please try again.";
         console.error("====== BACKEND ERROR ======");
@@ -130,7 +184,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
         setUploadProgress(0);
       }
     },
-    [activeCategory, chartId, description, fetchImages, showToast]
+    [activeCategory, chartId, description, fetchImages, showToast, runAiDetection]
   );
 
   // Delete handler
@@ -352,7 +406,13 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredImages.map((image) => (
+              {filteredImages.map((image) => {
+                const isPanoramic = image.image_type === "panoramic_xray";
+                const isAnalyzing = analyzingIds.has(image.image_id);
+                const analysis = isPanoramic ? getAnalysisForImage(image.image_id) : undefined;
+                const findingCount = analysis?.detection_data?.detections?.length ?? 0;
+
+                return (
                 <div
                   key={image.image_id}
                   className="group relative bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:shadow-md hover:border-slate-300"
@@ -365,6 +425,27 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
+
+                    {/* AI detection status (panoramic X-ray only) */}
+                    {isPanoramic && isAnalyzing && (
+                      <div className="absolute inset-0 bg-slate-900/40 flex flex-col items-center justify-center gap-2 text-white text-xs font-semibold">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Analyzing X-ray…
+                      </div>
+                    )}
+                    {isPanoramic && !isAnalyzing && analysis && (
+                      <span
+                        className={cn(
+                          "absolute top-2 right-2 flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold shadow",
+                          findingCount > 0
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-teal-100 text-teal-700"
+                        )}
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {findingCount > 0 ? `${findingCount} finding${findingCount > 1 ? "s" : ""}` : "No findings"}
+                      </span>
+                    )}
 
                     {/* Hover Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-center pb-4 gap-2">
@@ -412,7 +493,8 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
                     </p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
