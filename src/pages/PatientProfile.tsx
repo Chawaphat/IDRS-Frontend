@@ -7,17 +7,38 @@ import { patientService } from '@/services/patientService';
 import type { BackendPatient, ImageManagement } from '@/services/patientService';
 import { dentalChartService } from '@/services/dentalChartService';
 import type { DentalChart } from '@/services/types/dentalChart';
-import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, Stethoscope, PanelLeftClose, PanelLeft, X, Trash2, AlertTriangle } from 'lucide-react';
+import { imageManagementService } from '@/services/imageManagementService';
+import type { ImageCategory } from '@/services/imageManagementService';
+import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, Stethoscope, PanelLeftClose, PanelLeft, X, Trash2, AlertTriangle, ScanLine, FileImage, FolderOpen, Upload, ImagePlus, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toastStore';
 import type { Patient } from './Patients';
 import { useAuthStore } from '@/store/authStore';
 import { useConfirmStore } from '@/store/confirmStore';
+import { cn } from '@/lib/utils';
 
 const SIDEBAR_MENUS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'charts', label: 'Clinical Charts', icon: Stethoscope },
   { id: 'images', label: 'Images', icon: ImageIcon },
 ];
+
+type ImageFilter = 'all' | 'intraoral' | 'panoramic_xray' | 'other';
+
+const IMAGE_FILTERS: { id: ImageFilter; label: string; icon: React.ReactNode }[] = [
+  { id: 'all', label: 'All', icon: <ImageIcon className="w-4 h-4" /> },
+  { id: 'intraoral', label: 'Intraoral', icon: <ScanLine className="w-4 h-4" /> },
+  { id: 'panoramic_xray', label: 'Panoramic X-ray', icon: <FileImage className="w-4 h-4" /> },
+  { id: 'other', label: 'Other', icon: <FolderOpen className="w-4 h-4" /> },
+];
+
+const UPLOAD_CATEGORIES: { id: ImageCategory; label: string; icon: React.ReactNode }[] = [
+  { id: 'intraoral', label: 'Intraoral', icon: <ScanLine className="w-4 h-4" /> },
+  { id: 'panoramic_xray', label: 'Panoramic X-ray', icon: <FileImage className="w-4 h-4" /> },
+  { id: 'other', label: 'Other', icon: <FolderOpen className="w-4 h-4" /> },
+];
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export default function PatientProfilePage() {
   const { id } = useParams();
@@ -36,6 +57,20 @@ export default function PatientProfilePage() {
 
   const [images, setImages] = useState<ImageManagement[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [imageFilter, setImageFilter] = useState<ImageFilter>('all');
+  const [zoomImage, setZoomImage] = useState<ImageManagement | null>(null);
+
+  // Upload-from-Directory state — images are chart-scoped on the backend, so
+  // uploading here also requires picking which visit (chart) it belongs to.
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadChartId, setUploadChartId] = useState<string>('');
+  const [uploadCategory, setUploadCategory] = useState<ImageCategory>('intraoral');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadDragOver, setUploadDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const uploadFileInputRef = useRef<HTMLInputElement>(null);
   const [isCreatingChart, setIsCreatingChart] = useState(false);
 
   const askConfirm = useConfirmStore((state) => state.ask);
@@ -146,6 +181,77 @@ export default function PatientProfilePage() {
       console.error("Failed to load images", err);
     } finally {
       setLoadingImages(false);
+    }
+  };
+
+  // ---------- Upload from Patient Directory ----------
+  const sortedChartsDesc = [...charts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const openUploadModal = () => {
+    setUploadChartId(sortedChartsDesc[0]?.chart_id ?? '');
+    setUploadCategory(imageFilter !== 'all' ? imageFilter : 'intraoral');
+    setUploadFile(null);
+    setUploadPreviewUrl(null);
+    setUploadDescription('');
+    setShowUploadModal(true);
+  };
+
+  const closeUploadModal = () => {
+    if (uploading) return;
+    setShowUploadModal(false);
+    setUploadPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setUploadFile(null);
+  };
+
+  const selectUploadFile = (file: File) => {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      showToast('Invalid file type. Please upload JPG, PNG, or WebP images.', 'error');
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      showToast('File size exceeds 10MB limit.', 'error');
+      return;
+    }
+    setUploadPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setUploadFile(file);
+  };
+
+  // A chart holds one panoramic X-ray at a time — uploading a second one to
+  // the same visit replaces the first, same rule as the chart-level gallery.
+  const existingPanoramicForUploadChart = uploadCategory === 'panoramic_xray'
+    ? images.find(img => img.chart_id === uploadChartId && img.image_type === 'panoramic_xray')
+    : undefined;
+
+  const handleModalUpload = async () => {
+    if (!uploadFile || !uploadChartId) return;
+    setUploading(true);
+    try {
+      if (existingPanoramicForUploadChart) {
+        await imageManagementService.delete(uploadChartId, existingPanoramicForUploadChart.image_id);
+        if (existingPanoramicForUploadChart.image_file) {
+          await imageManagementService.deleteFromStorage(existingPanoramicForUploadChart.image_type, existingPanoramicForUploadChart.image_file);
+        }
+      }
+      const fileName = await imageManagementService.uploadToStorage(uploadFile, uploadCategory);
+      await imageManagementService.create(uploadChartId, {
+        image_type: uploadCategory,
+        image_file: fileName,
+        description: uploadDescription.trim() || undefined,
+      });
+      await fetchImages(charts);
+      showToast('Image uploaded successfully!', 'success');
+      closeUploadModal();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || 'Failed to upload image. Please try again.';
+      showToast(`Upload failed: ${detail}`, 'error');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -662,26 +768,100 @@ export default function PatientProfilePage() {
                             )}
                         </div>
 
-                        {/* Bottom Row: Recent Images (Mocked) */}
+                        {/* Bottom Row: Recent Images — most recently uploaded across every chart */}
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col shrink-0 mb-6">
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-800">Images Overview</h3>
                                     <p className="text-sm text-slate-500 mt-0.5">X-ray Photos & Intraoral Photos</p>
                                 </div>
-                            </div>
-                            <div className="flex-1 flex items-center justify-center">
-                                <div className="relative w-full max-w-2xl aspect-[16/9] rounded-3xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center group cursor-pointer hover:bg-slate-100 transition-colors">
-                                    <svg className="absolute inset-0 w-full h-full text-slate-200 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                                        <line x1="0" y1="0" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                                        <line x1="100%" y1="0" x2="0" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                                    </svg>
-                                    <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-xl shadow-sm border border-slate-200 text-sm font-bold text-slate-600 flex items-center gap-2">
-                                        <ImageIcon className="w-5 h-5 text-slate-400" />
-                                        Images Placeholder
-                                    </div>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={openUploadModal}
+                                        disabled={charts.length === 0}
+                                        title={charts.length === 0 ? 'Create a clinical chart first' : undefined}
+                                        className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-200 disabled:cursor-not-allowed text-white disabled:text-slate-400 text-sm font-semibold px-3.5 py-1.5 rounded-xl shadow-sm shadow-teal-500/20 disabled:shadow-none transition-colors"
+                                    >
+                                        <Upload className="w-3.5 h-3.5" />
+                                        Upload
+                                    </button>
+                                    {!loadingImages && images.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveMenu('images')}
+                                            className="flex items-center gap-1 text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+                                        >
+                                            View all
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
+
+                            {loadingImages ? (
+                                <div className="grid grid-cols-4 auto-rows-[84px] gap-3" style={{ gridAutoFlow: 'dense' }}>
+                                    {Array.from({ length: 6 }).map((_, i) => (
+                                        <div key={i} className={cn("rounded-xl bg-slate-100 animate-pulse", i === 0 && "col-span-2 row-span-2")} />
+                                    ))}
+                                </div>
+                            ) : images.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center text-center py-10">
+                                    <div className="h-14 w-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-300 mb-3">
+                                        <ImageIcon className="w-7 h-7" />
+                                    </div>
+                                    <p className="text-sm font-bold text-slate-600">No images yet</p>
+                                    <p className="text-xs text-slate-400 mt-1">Photos and X-rays uploaded to any chart will appear here.</p>
+                                </div>
+                            ) : (() => {
+                                const recentImages = [...images]
+                                    .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
+                                    .slice(0, 6);
+                                const count = recentImages.length;
+                                // Fixed 4-column bento only makes sense once there are enough images
+                                // to fill it — with 1 or 2, size cells to fill the row instead of
+                                // leaving dead space to the right.
+                                const cols = count === 1 ? 1 : count === 2 ? 2 : 4;
+
+                                return (
+                                    <div
+                                        className={cn("grid gap-3 auto-rows-[84px]", cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-4")}
+                                        style={{ gridAutoFlow: 'dense' }}
+                                    >
+                                        {recentImages.map((img, i) => (
+                                            <button
+                                                key={img.image_id}
+                                                type="button"
+                                                onClick={() => setZoomImage(img)}
+                                                className={cn(
+                                                    "group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-200 transition-all hover:shadow-md hover:-translate-y-0.5",
+                                                    count === 1 && "row-span-3",
+                                                    count === 2 && "row-span-3",
+                                                    count >= 3 && i === 0 && "col-span-2 row-span-2"
+                                                )}
+                                            >
+                                                <img
+                                                    src={img.image_url}
+                                                    alt={img.description || "Clinical image"}
+                                                    className="w-full h-full object-contain"
+                                                    loading="lazy"
+                                                />
+                                                <span className={cn(
+                                                    "absolute top-1.5 left-1.5 bg-white/90 text-slate-600 font-bold px-1.5 py-0.5 rounded-full",
+                                                    i === 0 ? "text-[10px]" : "text-[9px]"
+                                                )}>
+                                                    {img.image_type === 'panoramic_xray' ? 'Pano' : img.image_type === 'intraoral' ? 'Intra' : 'Other'}
+                                                </span>
+                                                {i === 0 && (
+                                                    <span className="absolute bottom-1.5 left-1.5 bg-teal-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                                        Latest
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
@@ -808,32 +988,333 @@ export default function PatientProfilePage() {
                     </div>
                 )}
                 
-                {/*  Images Section */}
-                {activeMenu === 'images' && (
+                {/* Images Section — aggregates images across every clinical chart for this patient */}
+                {activeMenu === 'images' && (() => {
+                    const filteredImages = images.filter(img => imageFilter === 'all' || img.image_type === imageFilter);
+                    const countFor = (f: ImageFilter) => f === 'all' ? images.length : images.filter(i => i.image_type === f).length;
+                    const chartFor = (chartId: string) => charts.find(c => c.chart_id === chartId);
+                    const typeLabel = (t: ImageManagement['image_type']) => t === 'panoramic_xray' ? 'Panoramic' : t === 'intraoral' ? 'Intraoral' : 'Other';
+
+                    return (
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex-1 flex flex-col min-h-0">
                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 shrink-0">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">X-ray & Photos</h3>
-                                <p className="text-sm text-slate-500">Intraoral photos and panoramic X-ray scans</p>
+                                <p className="text-sm text-slate-500">Intraoral photos and panoramic X-ray scans across all visits</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {!loadingImages && images.length > 0 && (
+                                    <span className="text-xs font-semibold text-slate-400">{images.length} image{images.length !== 1 ? 's' : ''}</span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={openUploadModal}
+                                    disabled={charts.length === 0}
+                                    title={charts.length === 0 ? 'Create a clinical chart first' : undefined}
+                                    className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-200 disabled:cursor-not-allowed text-white disabled:text-slate-400 text-sm font-semibold px-4 py-2 rounded-xl shadow-sm shadow-teal-500/20 disabled:shadow-none transition-colors"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    Upload
+                                </button>
                             </div>
                         </div>
 
-                        <div className="flex-1 flex items-center justify-center p-8">
-                            <div className="relative w-full max-w-2xl aspect-[16/9] rounded-3xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center group">
-                                <svg className="absolute inset-0 w-full h-full text-slate-200 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                                    <line x1="0" y1="0" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                                    <line x1="100%" y1="0" x2="0" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                                </svg>
-                                <div className="bg-white/90 backdrop-blur-sm px-6 py-4 rounded-xl shadow-lg border border-slate-200 flex flex-col items-center gap-2">
-                                    <ImageIcon className="w-8 h-8 text-slate-400" />
-                                    <span className="text-base font-bold text-slate-700">Images Module</span>
-                                    <span className="text-sm text-slate-500">Mockup placeholder (Coming Soon)</span>
+                        {/* Category filter */}
+                        <div className="flex gap-2 mb-5 shrink-0 flex-wrap">
+                            {IMAGE_FILTERS.map(f => {
+                                const count = countFor(f.id);
+                                const isActive = imageFilter === f.id;
+                                return (
+                                    <button
+                                        key={f.id}
+                                        type="button"
+                                        onClick={() => setImageFilter(f.id)}
+                                        className={cn(
+                                            "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all",
+                                            isActive ? "bg-teal-500 text-white shadow-md shadow-teal-500/20" : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200"
+                                        )}
+                                    >
+                                        {f.icon}
+                                        <span>{f.label}</span>
+                                        {count > 0 && (
+                                            <span className={cn(
+                                                "min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold px-1",
+                                                isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-500"
+                                            )}>
+                                                {count}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto min-h-0">
+                            {loadingImages ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 auto-rows-[140px] gap-4" style={{ gridAutoFlow: 'dense' }}>
+                                    {Array.from({ length: 8 }).map((_, i) => (
+                                        <div key={i} className={cn("rounded-2xl bg-slate-100 animate-pulse", i === 0 && "md:col-span-2 md:row-span-2")} />
+                                    ))}
                                 </div>
+                            ) : filteredImages.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-center py-16">
+                                    <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-300 mb-4">
+                                        <ImageIcon className="w-8 h-8" />
+                                    </div>
+                                    <p className="text-sm font-bold text-slate-600">
+                                        No {imageFilter === 'all' ? '' : IMAGE_FILTERS.find(f => f.id === imageFilter)?.label + ' '}images yet
+                                    </p>
+                                    <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                                        Images uploaded to any clinical chart for this patient will appear here.
+                                    </p>
+                                </div>
+                            ) : (() => {
+                                const count = filteredImages.length;
+                                // Fixed 4-column bento only makes sense once there are enough images
+                                // to fill it — with 1 or 2, size cells to fill the row instead of
+                                // leaving dead space to the right.
+                                const gridColsClass = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-4";
+
+                                return (
+                                    <div className={cn("grid gap-4 auto-rows-[140px]", gridColsClass)} style={{ gridAutoFlow: 'dense' }}>
+                                        {filteredImages.map(img => {
+                                            const chart = chartFor(img.chart_id);
+                                            const isPanoramic = img.image_type === 'panoramic_xray';
+                                            return (
+                                                <button
+                                                    key={img.image_id}
+                                                    type="button"
+                                                    onClick={() => setZoomImage(img)}
+                                                    className={cn(
+                                                        "group relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-200 text-left transition-all hover:shadow-md hover:-translate-y-0.5",
+                                                        count === 1 && "row-span-2",
+                                                        count === 2 && "row-span-2",
+                                                        count >= 3 && isPanoramic && "col-span-2 row-span-2"
+                                                    )}
+                                                >
+                                                    <img
+                                                        src={img.image_url}
+                                                        alt={img.description || "Clinical image"}
+                                                        className="w-full h-full object-contain"
+                                                        loading="lazy"
+                                                    />
+                                                    <span className="absolute top-2 left-2 bg-white/90 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                                        {typeLabel(img.image_type)}
+                                                    </span>
+                                                    {chart && (
+                                                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-900/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <p className="text-[10px] font-semibold text-white">
+                                                                {new Date(chart.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                    );
+                })()}
+
+                {/* Full-screen image preview */}
+                {zoomImage && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 p-4 sm:p-8 backdrop-blur-md animate-in zoom-in-95 duration-200"
+                        onClick={() => setZoomImage(null)}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setZoomImage(null)}
+                            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-full transition-colors"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                        <div className="flex flex-col items-center gap-4 max-w-full max-h-full" onClick={e => e.stopPropagation()}>
+                            <img
+                                src={zoomImage.image_url}
+                                alt={zoomImage.description || "Clinical image preview"}
+                                className="max-w-full max-h-[75vh] rounded-lg shadow-2xl object-contain"
+                            />
+                            <div className="flex items-center gap-3">
+                                {zoomImage.description && (
+                                    <span className="text-sm text-white/80">{zoomImage.description}</span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/patients/${patient?.id}/charts/${zoomImage.chart_id}`)}
+                                    className="flex items-center gap-1.5 bg-white text-slate-700 text-sm font-semibold px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 transition-colors"
+                                >
+                                    Go to chart
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
                             </div>
                         </div>
                     </div>
                 )}
-                
+
+                {/* Upload Image Modal — pick a visit, category, then upload */}
+                {showUploadModal && (
+                    <div
+                        className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+                        onClick={closeUploadModal}
+                    >
+                        <div
+                            className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-5">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">Upload Image</h3>
+                                    <p className="text-sm text-slate-500">Choose a visit and category, then add the file.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeUploadModal}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Visit selector */}
+                            <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">Visit</label>
+                            <select
+                                value={uploadChartId}
+                                onChange={e => setUploadChartId(e.target.value)}
+                                className="w-full mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            >
+                                {sortedChartsDesc.map(chart => (
+                                    <option key={chart.chart_id} value={chart.chart_id}>
+                                        {new Date(chart.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                        {chart.chart_id === sortedChartsDesc[0]?.chart_id ? ' (most recent)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Category picker */}
+                            <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">Category</label>
+                            <div className="flex gap-2 mb-4 flex-wrap">
+                                {UPLOAD_CATEGORIES.map(cat => {
+                                    const isActive = uploadCategory === cat.id;
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => setUploadCategory(cat.id)}
+                                            className={cn(
+                                                "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all",
+                                                isActive ? "bg-teal-500 text-white shadow-md shadow-teal-500/20" : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200"
+                                            )}
+                                        >
+                                            {cat.icon}
+                                            {cat.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {existingPanoramicForUploadChart && (
+                                <div className="flex items-start gap-2 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-amber-700 leading-relaxed">
+                                        This visit already has a panoramic X-ray. Uploading a new one will replace it and its AI detection result.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Dropzone */}
+                            <div
+                                onDragOver={e => { e.preventDefault(); setUploadDragOver(true); }}
+                                onDragLeave={e => { e.preventDefault(); setUploadDragOver(false); }}
+                                onDrop={e => {
+                                    e.preventDefault();
+                                    setUploadDragOver(false);
+                                    const file = e.dataTransfer.files?.[0];
+                                    if (file) selectUploadFile(file);
+                                }}
+                                onClick={() => uploadFileInputRef.current?.click()}
+                                className={cn(
+                                    "relative rounded-2xl border-2 border-dashed p-5 text-center cursor-pointer transition-all mb-4",
+                                    uploadDragOver ? "border-teal-400 bg-teal-50/50" : "border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50"
+                                )}
+                            >
+                                <input
+                                    ref={uploadFileInputRef}
+                                    type="file"
+                                    accept=".jpg,.jpeg,.png,.webp"
+                                    className="hidden"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) selectUploadFile(file);
+                                        e.target.value = '';
+                                    }}
+                                />
+                                {uploadPreviewUrl ? (
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0">
+                                            <img src={uploadPreviewUrl} alt="Selected file" className="w-full h-full object-contain" />
+                                        </div>
+                                        <div className="text-left min-w-0">
+                                            <p className="text-sm font-semibold text-slate-700 truncate">{uploadFile?.name}</p>
+                                            <p className="text-xs text-slate-400">Click to choose a different file</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <ImagePlus className="w-6 h-6 text-slate-400" />
+                                        <p className="text-sm font-semibold text-slate-600">
+                                            Drag & drop, or <span className="text-teal-600 underline underline-offset-2">browse files</span>
+                                        </p>
+                                        <p className="text-xs text-slate-400">JPG, PNG, WebP · Max 10MB</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Description */}
+                            <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">Description (optional)</label>
+                            <input
+                                type="text"
+                                value={uploadDescription}
+                                onChange={e => setUploadDescription(e.target.value)}
+                                placeholder="Add a description"
+                                className="w-full mb-5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeUploadModal}
+                                    disabled={uploading}
+                                    className="flex-1 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold py-2.5 text-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleModalUpload}
+                                    disabled={!uploadFile || !uploadChartId || uploading}
+                                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-teal-500 hover:bg-teal-600 disabled:bg-slate-200 disabled:cursor-not-allowed text-white disabled:text-slate-400 font-semibold py-2.5 text-sm shadow-md shadow-teal-500/20 disabled:shadow-none transition-colors"
+                                >
+                                    {uploading ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Uploading...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="w-4 h-4" />
+                                            Upload
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Placeholders for other menus */}
                 {activeMenu !== 'overview' && activeMenu !== 'charts' && activeMenu !== 'images' && (
                    <div className="bg-white border border-slate-200 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm flex-1">

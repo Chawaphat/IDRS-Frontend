@@ -190,7 +190,7 @@ export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
       </div>
 
       <div className="relative h-[calc(100%-3.5rem)] min-h-[660px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <OdontogramUI />
+        <OdontogramUI chartId={chartId} />
         {loading && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-50/75 backdrop-blur-sm">
             <div className="flex flex-col items-center rounded-2xl border border-teal-100 bg-white p-6 shadow-xl">

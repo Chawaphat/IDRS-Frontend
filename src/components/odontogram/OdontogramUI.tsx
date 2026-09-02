@@ -15,6 +15,7 @@ import type { Language } from "./i18n/translations";
 import type { NumberingSystem } from "./utils/numbering";
 import { applyThemeConfig, type OdontogramThemeConfig } from "./theme";
 import { OdontogramWizard } from "./OdontogramWizard";
+import { ImageReferencePanel } from "./ImageReferencePanel";
 export type { OdontogramThemeConfig };
 
 const icon8Url = "/icon-svgs/icon_8.svg";
@@ -29,6 +30,7 @@ type AppProps = {
   numberingSystem?: NumberingSystem;
   onNumberingChange?: (system: NumberingSystem) => void;
   themeConfig?: OdontogramThemeConfig;
+  chartId?: string;
 };
 
 const NUMBERING_OPTIONS: { value: NumberingSystem; labelKey: string }[] = [
@@ -43,6 +45,7 @@ export default function OdontogramUI({
   numberingSystem,
   onNumberingChange,
   themeConfig,
+  chartId,
 }: AppProps) {
   const { t } = useI18n({ language, onLanguageChange });
   const [internalNumbering, setInternalNumbering] = useState<NumberingSystem>(numberingSystem ?? "FDI");
@@ -190,30 +193,12 @@ export default function OdontogramUI({
               className="tooth-grid shrink-0 px-4 pb-4 pt-1"
             />
 
-            <div className="mt-auto flex w-full flex-col gap-3 border-t border-slate-100 bg-slate-50/50 p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-[13px] font-bold uppercase tracking-wide text-slate-700">Image References</p>
-              </div>
-              <div className="flex h-[180px] flex-row gap-4">
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <p className="text-xs font-semibold text-slate-500">Intraoral</p>
-                  <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100 text-xs font-medium text-slate-400">
-                    Coming soon
-                  </div>
-                </div>
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <p className="text-xs font-semibold text-slate-500">Panoramic X-Ray</p>
-                  <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100 text-xs font-medium text-slate-400">
-                    Coming soon
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ImageReferencePanel chartId={chartId} />
           </div>
         </section>
 
         <aside className="flex w-[42%] min-w-0 flex-col overflow-hidden bg-slate-50">
-          <OdontogramWizard />
+          <OdontogramWizard chartId={chartId} />
         </aside>
       </div>
     </div>

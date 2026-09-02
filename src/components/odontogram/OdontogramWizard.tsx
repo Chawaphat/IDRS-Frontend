@@ -20,6 +20,7 @@ import {
   type RootCanalStatus,
   type ToothState,
 } from "./odontogram";
+import { AISuggestionPanel } from "./AISuggestionPanel";
 
 type WizardPath = "tooth" | "edentulous" | "implant";
 
@@ -1123,7 +1124,11 @@ function StatusChoice({
   );
 }
 
-export function OdontogramWizard() {
+interface OdontogramWizardProps {
+  chartId?: string;
+}
+
+export function OdontogramWizard({ chartId }: OdontogramWizardProps) {
   const [snapshot, setSnapshot] = useState<OdontogramSnapshot>(() => getOdontogramSnapshot());
   const [step, setStep] = useState<1 | 2>(1);
   const [path, setPath] = useState<WizardPath>("tooth");
@@ -1244,6 +1249,8 @@ export function OdontogramWizard() {
             {path === "implant" && <ImplantPath toothNo={toothNo} state={state} />}
           </div>
         )}
+
+        <AISuggestionPanel chartId={chartId} toothNo={toothNo} />
       </div>
     </div>
   );

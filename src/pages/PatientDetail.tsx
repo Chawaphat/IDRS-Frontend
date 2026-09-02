@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSectionSaveStore } from '@/store/sectionSaveStore';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
-import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -376,23 +376,6 @@ export default function SequentialPatientPage() {
                         </div>
                     )}
 
-                    {/* Next Section Button */}
-                    {chartId && (() => {
-                        const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
-                        if (currentIndex === -1 || currentIndex === SECTIONS.length - 1) return null;
-                        const nextSection = SECTIONS[currentIndex + 1];
-                        return (
-                            <div className="max-w-4xl mx-auto mt-4 border-t border-slate-200 pt-6 flex justify-end pb-12">
-                                <Button 
-                                    onClick={() => handleSectionChange(nextSection.id)}
-                                    className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-6 py-5 flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02]"
-                                >
-                                    Next: {nextSection.title}
-                                    <ArrowRight className="w-5 h-5 ml-1" />
-                                </Button>
-                            </div>
-                        );
-                    })()}
                 </main>
             </div>
 
