@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Camera,
   Upload,
@@ -14,6 +14,8 @@ import {
   FolderOpen,
   Sparkles,
   ZoomIn,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,7 +25,10 @@ import { imageManagementService } from "@/services/imageManagementService";
 import type { ImageCategory } from "@/services/imageManagementService";
 import type { ImageManagement } from "@/services/patientService";
 import { aiDetectionResultService } from "@/services/aiDetectionResultService";
+import { AIDetectionViewer } from "@/components/ai/AIDetectionViewer";
+import type { AIDetectResult } from "@/lib/aiDetection";
 import { format, parseISO } from "date-fns";
+import { ToothLoaderIcon } from "@/components/ui/ToothLoader";
 
 interface ImageGallerySectionProps {
   chartId: string;
@@ -51,7 +56,9 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteImage, setConfirmDeleteImage] = useState<ImageManagement | null>(null);
   const [detectingId, setDetectingId] = useState<string | null>(null);
-  const [analyzedImageIds, setAnalyzedImageIds] = useState<Set<string>>(new Set());
+  // image_id -> its AI result. Doubles as "has this image been analyzed" (analyzedImageIds derives from its keys).
+  const [analysesById, setAnalysesById] = useState<Map<string, AIDetectResult>>(new Map());
+  const [showAIResults, setShowAIResults] = useState(true);
   const [pendingReplaceFile, setPendingReplaceFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,16 +77,19 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
     }
   }, [chartId]);
 
-  // Which images already have an AI analysis on record (drives "Detect" vs "Re-detect" label)
+  // Which images already have an AI analysis on record — drives "Detect" vs
+  // "Re-detect" label, and lets the panoramic hero auto-show results on load.
   const fetchAnalyses = useCallback(async () => {
     try {
       const analyses = await aiDetectionResultService.getByChart(chartId);
-      setAnalyzedImageIds(new Set(analyses.map((a) => a.image_id)));
+      setAnalysesById(new Map(analyses.map((a) => [a.image_id, a.detection_data])));
     } catch (err) {
       // Non-critical — the gallery still works without this, just shows "Detect" instead of "Re-detect"
       console.error("Failed to load AI analysis status:", err);
     }
   }, [chartId]);
+
+  const analyzedImageIds = useMemo(() => new Set(analysesById.keys()), [analysesById]);
 
   useEffect(() => {
     const load = async () => {
@@ -222,15 +232,17 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
     performUpload(file);
   }, [pendingReplaceFile, images, chartId, performUpload, showToast, clearPreview]);
 
-  // AI detection handler
+  // AI detection handler — the fresh result is shown inline immediately,
+  // no need to re-fetch it.
   const handleDetect = useCallback(
     async (image: ImageManagement) => {
       setDetectingId(image.image_id);
       try {
         const analysis = await aiDetectionResultService.detect(chartId, image.image_id);
-        setAnalyzedImageIds((prev) => new Set(prev).add(image.image_id));
+        setAnalysesById((prev) => new Map(prev).set(image.image_id, analysis.detection_data));
+        setShowAIResults(true);
         const count = analysis.detection_data?.detections?.length ?? 0;
-        showToast(`AI analysis complete — ${count} finding(s) detected. View them in Dental Status.`, "success");
+        showToast(`AI analysis complete — ${count} finding(s) detected`, "success");
       } catch (err: any) {
         const detail = err?.response?.data?.detail || err?.message || "Failed to run AI detection.";
         showToast(`AI detection failed: ${detail}`, "error");
@@ -254,7 +266,13 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
           await imageManagementService.deleteFromStorage(image.image_type, image.image_file);
         }
 
-        // 3. Refresh gallery
+        // 3. Refresh gallery — also drops the now-cascade-deleted AI analysis, if any
+        setAnalysesById((prev) => {
+          if (!prev.has(image.image_id)) return prev;
+          const next = new Map(prev);
+          next.delete(image.image_id);
+          return next;
+        });
         await fetchImages();
         showToast("Image deleted successfully.", "success");
       } catch (err) {
@@ -294,7 +312,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
     return (
       <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center min-h-[60vh] rounded-3xl">
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
-          <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-500 rounded-full animate-spin mb-6 shadow-sm" />
+          <ToothLoaderIcon className="w-16 h-16 mb-4" />
           <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Images</h3>
           <p className="text-slate-500 font-medium">Retrieving image gallery...</p>
         </div>
@@ -503,6 +521,18 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
                         </>
                       )}
                     </Button>
+                    {analyzedImageIds.has(panoramicImage.image_id) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAIResults((v) => !v)}
+                        className="rounded-xl text-slate-600 border-slate-200 hover:bg-slate-50"
+                      >
+                        {showAIResults ? <ChevronUp className="w-4 h-4 mr-1.5" /> : <ChevronDown className="w-4 h-4 mr-1.5" />}
+                        {showAIResults ? "Hide results" : "View results"}
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
@@ -515,6 +545,16 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
                     </Button>
                   </div>
                 </div>
+
+                {/* Inline AI results — same viewer used by the standalone AI Analysis tab */}
+                {showAIResults && analysesById.has(panoramicImage.image_id) && (
+                  <div className="border-t border-slate-100 p-4 sm:p-6 bg-slate-50/50">
+                    <AIDetectionViewer
+                      imageUrl={panoramicImage.image_url!}
+                      result={analysesById.get(panoramicImage.image_id)!}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="rounded-2xl border border-slate-100 bg-slate-50/30 py-16 flex flex-col items-center justify-center text-center">

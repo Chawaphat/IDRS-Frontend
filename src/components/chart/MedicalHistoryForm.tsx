@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Check, FileText, CalendarDays, MessageSquareText, HeartPulse, Activity, Trash2, Stethoscope, Clock, Pencil } from "lucide-react";
+import { Check, FileText, CalendarDays, MessageSquareText, HeartPulse, Activity, Trash2, Stethoscope, Clock, Pencil, Sunrise, Sun, Sunset, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,12 +15,22 @@ import type { MedicalHistoryUpdate, AllergyStatusType, PatientExpectationsType, 
 import { useToastStore } from "@/store/toastStore";
 import { SectionNotes } from "./components/SectionNotes";
 import { useSectionSave } from "@/hooks/useSectionSave";
+import { ToothLoaderIcon } from "@/components/ui/ToothLoader";
 
 interface MedicalHistoryFormProps {
   chartId: string;
   patient: any;
   onEditPatient?: () => void;
 }
+
+// Medication schedule periods — a medicine can be taken at more than one of
+// these, so this drives a multi-select toggle instead of a single time picker.
+const TIME_OF_DAY_OPTIONS: { label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { label: "Morning", icon: Sunrise },
+  { label: "Afternoon", icon: Sun },
+  { label: "Evening", icon: Sunset },
+  { label: "Before bed", icon: Moon },
+];
 
 export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: MedicalHistoryFormProps) {
   const { show: showToast } = useToastStore();
@@ -136,7 +146,7 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
     return (
         <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center min-h-[60vh] rounded-3xl">
             <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
-                <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-500 rounded-full animate-spin mb-6 shadow-sm" />
+                <ToothLoaderIcon className="w-16 h-16 mb-4" />
                 <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Section</h3>
                 <p className="text-slate-500 font-medium">Retrieving clinical data...</p>
             </div>
@@ -291,6 +301,7 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                       {formData.regular_doctor_visits && (
                           <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 border-t border-slate-100 pt-4 mt-2">
                               <div className="flex items-center gap-2">
+                                  <span className="text-sm text-slate-500 font-medium">Every</span>
                                   <Input
                                       type="number"
                                       value={formData.regular_doctor_months || ""}
@@ -299,7 +310,9 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                                       placeholder="0"
                                       autoFocus
                                   />
-                                  <span className="text-sm text-slate-500 font-medium">Months</span>
+                                  <span className="text-sm text-slate-500 font-medium">
+                                      {formData.regular_doctor_months === 1 ? "month" : "months"}
+                                  </span>
                               </div>
                               <Input
                                   type="text"
@@ -388,12 +401,12 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                               />
                           </div>
 
-                          <div className="grid grid-cols-4 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_1.4fr] gap-3">
                               <div className="space-y-2">
                                   <Label htmlFor="dose" className="text-xs font-bold text-slate-700">Dose</Label>
                                   <div className="flex items-center gap-2">
                                       <Input id="dose" type="number" className="focus-visible:ring-teal-500 bg-white flex-1" placeholder="0" value={medFormInput.dose} onChange={(e) => setMedFormInput(prev => ({ ...prev, dose: e.target.value }))} />
-                                      <span className="text-xs text-slate-500 min-w-fit">mg</span>
+                                      <span className="text-xs text-slate-500 min-w-fit">tab</span>
                                   </div>
                               </div>
                               <div className="space-y-2">
@@ -407,12 +420,37 @@ export default function MedicalHistoryForm({ chartId, patient, onEditPatient }: 
                                   <Label htmlFor="dosePerTime" className="text-xs font-bold text-slate-700">Per Time</Label>
                                   <div className="flex items-center gap-2">
                                       <Input id="dosePerTime" type="number" className="focus-visible:ring-teal-500 bg-white flex-1" placeholder="0" value={medFormInput.dosePerTime} onChange={(e) => setMedFormInput(prev => ({ ...prev, dosePerTime: e.target.value }))} />
-                                      <span className="text-xs text-slate-500 min-w-fit">mg</span>
+                                      <span className="text-xs text-slate-500 min-w-fit">tab</span>
                                   </div>
                               </div>
                               <div className="space-y-2">
-                                  <Label htmlFor="timeOfDay" className="text-xs font-bold text-slate-700">Time of Day</Label>
-                                  <Input id="timeOfDay" type="time" className="focus-visible:ring-teal-500 bg-white cursor-text" value={medFormInput.timeOfDay} onChange={(e) => setMedFormInput(prev => ({ ...prev, timeOfDay: e.target.value }))} />
+                                  <Label className="text-xs font-bold text-slate-700">Time of Day</Label>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                      {TIME_OF_DAY_OPTIONS.map(({ label, icon: Icon }) => {
+                                          const selected = medFormInput.timeOfDay ? medFormInput.timeOfDay.split(", ") : [];
+                                          const isActive = selected.includes(label);
+                                          return (
+                                              <button
+                                                  key={label}
+                                                  type="button"
+                                                  onClick={() => {
+                                                      const next = isActive ? selected.filter((x) => x !== label) : [...selected, label];
+                                                      const ordered = TIME_OF_DAY_OPTIONS.map((o) => o.label).filter((l) => next.includes(l));
+                                                      setMedFormInput((prev) => ({ ...prev, timeOfDay: ordered.join(", ") }));
+                                                  }}
+                                                  className={cn(
+                                                      "flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap",
+                                                      isActive
+                                                          ? "bg-teal-500 border-teal-500 text-white"
+                                                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                                  )}
+                                              >
+                                                  <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                                                  {label}
+                                              </button>
+                                          );
+                                      })}
+                                  </div>
                               </div>
                           </div>
 

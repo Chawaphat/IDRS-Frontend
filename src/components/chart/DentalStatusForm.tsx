@@ -20,9 +20,12 @@ import { API_BASE_URL } from "@/lib/apiBaseUrl";
 
 interface DentalStatusFormProps {
   chartId: string;
+  onNext?: () => void;
+  nextLabel?: string;
+  onGoToImageGallery?: () => void;
 }
 
-export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
+export default function DentalStatusForm({ chartId, onNext, nextLabel, onGoToImageGallery }: DentalStatusFormProps) {
   const { show: showToast } = useToastStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -190,7 +193,7 @@ export default function DentalStatusForm({ chartId }: DentalStatusFormProps) {
       </div>
 
       <div className="relative h-[calc(100%-3.5rem)] min-h-[660px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <OdontogramUI chartId={chartId} />
+        <OdontogramUI chartId={chartId} onNext={onNext} nextLabel={nextLabel} onGoToImageGallery={onGoToImageGallery} />
         {loading && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-50/75 backdrop-blur-sm">
             <div className="flex flex-col items-center rounded-2xl border border-teal-100 bg-white p-6 shadow-xl">

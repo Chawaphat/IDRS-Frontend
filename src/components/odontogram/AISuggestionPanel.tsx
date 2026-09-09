@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Sparkles, X, ZoomIn } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileImage, Loader2, Sparkles, UploadCloud, X, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { aiDetectionResultService } from "@/services/aiDetectionResultService";
-import { imageManagementService } from "@/services/imageManagementService";
-import { diseaseColor, diseaseDescription, cropToothImage, type AIDetectResult, type AITooth } from "@/lib/aiDetection";
+import { imageManagementService, onChartImagesChanged } from "@/services/imageManagementService";
+import type { ImageManagement } from "@/services/patientService";
+import { diseaseColor, cropToothImage, type AIDetectResult, type AITooth } from "@/lib/aiDetection";
 
 interface AISuggestionPanelProps {
   chartId?: string;
   toothNo: number;
+  /** Lets the empty state jump straight to the Image Gallery tab to upload a panoramic X-ray. */
+  onGoToImageGallery?: () => void;
 }
 
 /**
@@ -20,16 +23,22 @@ interface AISuggestionPanelProps {
  * dentist can visually check each tooth one by one against the X-ray, not
  * just the ones with a flagged disease.
  */
-export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) {
+export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISuggestionPanelProps) {
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AIDetectResult | null>(null);
-  const [xrayUrl, setXrayUrl] = useState<string | null>(null);
+  const [xrayImage, setXrayImage] = useState<ImageManagement | null>(null);
   const [xrayLoaded, setXrayLoaded] = useState(false);
   const [cropUrl, setCropUrl] = useState<string | null>(null);
+  // Distinguishes "still generating" from "generation failed" — cropToothImage
+  // fails silently (returns ""), so without this both looked like an eternal
+  // loading spinner with no way to tell the two apart.
+  const [cropFailed, setCropFailed] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  const [detecting, setDetecting] = useState(false);
 
   const xrayImgRef = useRef<HTMLImageElement>(null);
   const cropCache = useRef<Map<number, string>>(new Map());
+  const xrayUrl = xrayImage?.image_url ?? null;
 
   // Fetch once per chart — the AI analysis + the panoramic X-ray it ran on.
   useEffect(() => {
@@ -38,7 +47,7 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
       return;
     }
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       setLoading(true);
       try {
         const [analyses, images] = await Promise.all([
@@ -49,8 +58,7 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
         // A chart holds one panoramic X-ray, so at most one analysis matters — take the latest.
         const latest = analyses[analyses.length - 1] ?? null;
         setAnalysis(latest?.detection_data ?? null);
-        const xray = images.find((img) => img.image_type === "panoramic_xray");
-        setXrayUrl(xray?.image_url ?? null);
+        setXrayImage(images.find((img) => img.image_type === "panoramic_xray") ?? null);
       } catch (err) {
         // Non-critical for the wizard — fail silently, just don't show a suggestion.
         console.error("Failed to load AI suggestion data:", err);
@@ -58,11 +66,32 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+    load();
+    // Dental Status stays mounted (hidden, not unmounted) once visited, so a
+    // plain chartId-keyed effect won't notice an X-ray uploaded afterwards
+    // from the Image Gallery tab. Re-fetch whenever this chart's images change.
+    const unsubscribe = onChartImagesChanged(chartId, load);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [chartId]);
+
+  // Inline "Run AI Detection" — same call the Image Gallery's Detect button
+  // makes, just reachable without leaving the charting screen.
+  const runDetection = async () => {
+    if (!chartId || !xrayImage) return;
+    setDetecting(true);
+    try {
+      const result = await aiDetectionResultService.detect(chartId, xrayImage.image_id);
+      setAnalysis(result.detection_data);
+    } catch (err) {
+      console.error("Failed to run AI detection:", err);
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const tooth: AITooth | undefined = analysis?.teeth.find((t) => t.tooth_fdi === toothNo);
   const diseases = tooth?.diseases ?? [];
@@ -70,6 +99,7 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
   // Crop the active tooth out of the full X-ray once both are ready.
   useEffect(() => {
     setZoomed(false); // switching teeth should close any open zoom
+    setCropFailed(false);
     if (!tooth || !xrayLoaded || !xrayImgRef.current) {
       setCropUrl(null);
       return;
@@ -80,8 +110,13 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
       return;
     }
     const url = cropToothImage(xrayImgRef.current, tooth.bbox);
+    if (!url) {
+      setCropUrl(null);
+      setCropFailed(true);
+      return;
+    }
     cropCache.current.set(tooth.tooth_fdi, url);
-    setCropUrl(url || null);
+    setCropUrl(url);
   }, [tooth, xrayLoaded]);
 
   // Close the zoom with Escape
@@ -94,8 +129,96 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
     return () => window.removeEventListener("keydown", handleKey);
   }, [zoomed]);
 
-  if (!chartId || loading) return null; // don't add visual noise while nothing to show yet
-  if (!analysis) return null; // no AI analysis has been run for this chart
+  if (!chartId) return null; // no chart context at all — nothing to ever show here
+
+  // Loading: render the same shell (header + card) with skeleton placeholders
+  // instead of nothing, so the panel doesn't flash empty while data fetches.
+  if (loading) {
+    return (
+      <div className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">AI Suggestion</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+          <div className="w-full aspect-[4/3] rounded-xl bg-slate-100 animate-pulse mb-3 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />
+          </div>
+          <div className="h-4 w-2/3 rounded bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // No panoramic X-ray uploaded at all — nudge toward the Image Gallery instead of just hiding.
+  if (!xrayImage) {
+    return (
+      <div className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">AI Suggestion</p>
+        </div>
+        <div className="min-h-[320px] rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 flex flex-col items-center justify-center text-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+            <FileImage className="w-8 h-8 text-slate-300" />
+          </div>
+          <p className="text-lg font-bold text-slate-700">No panoramic X-ray uploaded yet</p>
+          <p className="text-sm leading-relaxed text-slate-400 max-w-xs">
+            Upload one in the Image Gallery to get AI-powered suggestions while charting.
+          </p>
+          {onGoToImageGallery && (
+            <Button
+              type="button"
+              onClick={onGoToImageGallery}
+              className="mt-2 bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 text-sm"
+            >
+              <UploadCloud className="w-4 h-4 mr-2" />
+              Go to Image Gallery
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // X-ray exists but hasn't been analyzed yet — offer to run it right here.
+  if (!analysis) {
+    return (
+      <div className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">AI Suggestion</p>
+        </div>
+        <div className="min-h-[320px] rounded-2xl border border-slate-200 bg-white p-10 flex flex-col items-center justify-center text-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-teal-50 flex items-center justify-center">
+            <Sparkles className="w-8 h-8 text-teal-600" />
+          </div>
+          <p className="text-lg font-bold text-slate-700">This X-ray hasn't been analyzed yet</p>
+          <p className="text-sm leading-relaxed text-slate-400 max-w-xs">
+            Run AI detection to get per-tooth suggestions while charting.
+          </p>
+          <Button
+            type="button"
+            onClick={runDetection}
+            disabled={detecting}
+            className="mt-2 bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 text-sm"
+          >
+            {detecting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Detecting...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Run AI Detection
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4">
@@ -148,6 +271,11 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
                   </div>
                 </div>
               </>
+            ) : cropFailed ? (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-4 text-center">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span className="text-[10px] font-semibold text-slate-400">Couldn't generate this crop</span>
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
@@ -156,35 +284,34 @@ export function AISuggestionPanel({ chartId, toothNo }: AISuggestionPanelProps) 
           </button>
 
           {diseases.length === 0 ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2.5">
               <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-              <span className="text-xs font-semibold text-slate-500">AI did not detect any issues on this tooth.</span>
+              <span className="text-xs font-bold text-green-700">No issues detected on this tooth</span>
             </div>
           ) : (
-            <>
-              <div className="space-y-2">
-                {diseases.map((d, i) => {
-                  const color = diseaseColor(d.disease);
-                  return (
-                    <div key={i} className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-extrabold flex items-center gap-1.5" style={{ color }}>
-                        <i className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: color }} />
-                        {d.disease}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 flex-shrink-0">
-                        {(d.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-500 mt-3 pt-3 border-t border-slate-100">
-                {diseaseDescription(diseases[0].disease)}
-              </p>
-            </>
+            <div className="space-y-1.5">
+              {diseases.map((d, i) => {
+                const color = diseaseColor(d.disease);
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
+                    style={{ backgroundColor: `${color}14` }}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-extrabold" style={{ color }}>
+                      <i className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: color }} />
+                      {d.disease}
+                    </span>
+                    <span className="text-base font-extrabold flex-shrink-0" style={{ color }}>
+                      {(d.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           )}
 
-          <p className="text-[10px] leading-relaxed text-slate-400 mt-2">
+          <p className="text-[10px] leading-relaxed text-slate-400 mt-2.5">
             AI-detected finding — not applied automatically. Review and record manually if confirmed.
           </p>
         </div>

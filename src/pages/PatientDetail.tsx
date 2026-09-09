@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSectionSaveStore } from '@/store/sectionSaveStore';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
-import { ArrowLeft, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +17,7 @@ import { Image as ImageIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ToothLoaderIcon } from '@/components/ui/ToothLoader';
 
 import OcclusalAnalysis from '@/components/OcclusalAnalysis';
 import { FaceMuscleChart } from '@/components/FaceMuscleChart';
@@ -51,6 +52,10 @@ const SECTIONS = [
     { id: 'occlusal', title: 'Occlusal Analysis' },
     { id: 'residualRidge', title: 'Residual Ridge Area' },
 ];
+
+// Sections whose content spans the full width (odontogram, occlusal grids, etc.) —
+// the "Next" button below them should match that width instead of the default max-w-4xl.
+const WIDE_SECTIONS = new Set(['dentalStatus', 'occlusal', 'residualRidge']);
 
 // Types and DEFAULT_STATE extracted to src/components/chart/types.ts
 
@@ -212,7 +217,7 @@ export default function SequentialPatientPage() {
         return (
             <div className="flex flex-col h-screen items-center justify-center bg-slate-50">
                 <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
-                    <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-500 rounded-full animate-spin mb-6 shadow-sm" />
+                    <ToothLoaderIcon className="w-32 h-32 mb-2" />
                     <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Chart</h3>
                     <p className="text-slate-500 font-medium">Retrieving patient clinical data...</p>
                 </div>
@@ -318,7 +323,7 @@ export default function SequentialPatientPage() {
                 <main className="flex-1 overflow-y-auto bg-slate-50 p-6 md:p-8 relative">
                     {/* 2. Patient History */}
                     {chartId && patient && (
-                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === "patientHistory" ? "block" : "hidden")}>
+                        <div className={cn("max-w-4xl mx-auto", activeSection === "patientHistory" ? "block" : "hidden")}>
                             <MedicalHistoryForm
                                 chartId={chartId}
                                 patient={patient}
@@ -329,28 +334,28 @@ export default function SequentialPatientPage() {
 
                     {/* 3. Image Gallery */}
                     {chartId && (
-                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === "imageGallery" ? "block" : "hidden")}>
+                        <div className={cn("max-w-4xl mx-auto", activeSection === "imageGallery" ? "block" : "hidden")}>
                             <ImageGallerySection chartId={chartId} />
                         </div>
                     )}
 
                     {/* 4. Extraoral Exam Form */}
                     {chartId && (
-                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === "extraoral" ? "block" : "hidden")}>
+                        <div className={cn("max-w-4xl mx-auto", activeSection === "extraoral" ? "block" : "hidden")}>
                             <ExtraoralExamForm chartId={chartId} />
                         </div>
                     )}
 
                     {/* 4. Esthetic Evaluation */}
                     {chartId && (
-                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === 'esthetic' ? "block" : "hidden")}>
+                        <div className={cn("max-w-4xl mx-auto", activeSection === 'esthetic' ? "block" : "hidden")}>
                             <EstheticEvaluation chartId={chartId} />
                         </div>
                     )}
 
                     {/* 5. VDO Evaluation */}
                     {chartId && (
-                        <div className={cn("max-w-4xl mx-auto space-y-8 pb-12", activeSection === 'vdo' ? "block" : "hidden")}>
+                        <div className={cn("max-w-4xl mx-auto", activeSection === 'vdo' ? "block" : "hidden")}>
                             <VdoEvaluationForm chartId={chartId} />
                         </div>
                     )}
@@ -358,7 +363,16 @@ export default function SequentialPatientPage() {
                     {/* 6. Dental Status */}
                     {chartId && (
                         <div className={cn("h-full w-full max-w-none", activeSection === 'dentalStatus' ? "block" : "hidden")}>
-                            <DentalStatusForm chartId={chartId} />
+                            <DentalStatusForm
+                                chartId={chartId}
+                                onNext={() => {
+                                    const idx = SECTIONS.findIndex(s => s.id === 'dentalStatus');
+                                    const next = SECTIONS[idx + 1];
+                                    if (next) handleSectionChange(next.id);
+                                }}
+                                nextLabel={`Next: ${SECTIONS[SECTIONS.findIndex(s => s.id === 'dentalStatus') + 1]?.title ?? ''}`}
+                                onGoToImageGallery={() => handleSectionChange('imageGallery')}
+                            />
                         </div>
                     )}
 
@@ -376,6 +390,26 @@ export default function SequentialPatientPage() {
                         </div>
                     )}
 
+                    {/* Next Section Button */}
+                    {chartId && (() => {
+                        // Dental Status has its own "Next" button in the odontogram header — skip the floating one here.
+                        if (activeSection === 'dentalStatus') return null;
+                        const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
+                        if (currentIndex === -1 || currentIndex === SECTIONS.length - 1) return null;
+                        const nextSection = SECTIONS[currentIndex + 1];
+                        const isWide = WIDE_SECTIONS.has(activeSection);
+                        return (
+                            <div className={cn("mt-3 flex justify-end pb-12", isWide ? "w-full max-w-none" : "max-w-4xl mx-auto")}>
+                                <Button
+                                    onClick={() => handleSectionChange(nextSection.id)}
+                                    className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-6 py-5 flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02]"
+                                >
+                                    Next: {nextSection.title}
+                                    <ArrowRight className="w-5 h-5 ml-1" />
+                                </Button>
+                            </div>
+                        );
+                    })()}
                 </main>
             </div>
 

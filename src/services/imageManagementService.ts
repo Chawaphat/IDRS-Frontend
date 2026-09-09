@@ -20,6 +20,25 @@ export interface ImageManagementUpdate {
 
 const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET || "Image";
 
+// Other tabs (e.g. the Dental Status odontogram) mount once and stay alive via
+// CSS visibility rather than remounting, so a plain useEffect keyed on chartId
+// won't refetch after an upload/delete happens elsewhere. This event lets any
+// screen showing chart images stay in sync without a page/chart reload.
+const IMAGES_CHANGED_EVENT = "idrs:chart-images-changed";
+
+function notifyImagesChanged(chartId: string) {
+  window.dispatchEvent(new CustomEvent(IMAGES_CHANGED_EVENT, { detail: { chartId } }));
+}
+
+export function onChartImagesChanged(chartId: string, callback: () => void): () => void {
+  const handler = (event: Event) => {
+    const detail = (event as CustomEvent<{ chartId: string }>).detail;
+    if (detail?.chartId === chartId) callback();
+  };
+  window.addEventListener(IMAGES_CHANGED_EVENT, handler);
+  return () => window.removeEventListener(IMAGES_CHANGED_EVENT, handler);
+}
+
 export const imageManagementService = {
   /**
    * Get all images for a chart (returns signed URLs from backend)
@@ -42,6 +61,7 @@ export const imageManagementService = {
       `/dental-charts/${chartId}/images`,
       payload,
     );
+    notifyImagesChanged(chartId);
     return response.data;
   },
 
@@ -57,6 +77,7 @@ export const imageManagementService = {
       `/dental-charts/${chartId}/images/${imageId}`,
       payload,
     );
+    notifyImagesChanged(chartId);
     return response.data;
   },
 
@@ -65,6 +86,7 @@ export const imageManagementService = {
    */
   delete: async (chartId: string, imageId: string): Promise<void> => {
     await api.delete(`/dental-charts/${chartId}/images/${imageId}`);
+    notifyImagesChanged(chartId);
   },
 
   /**

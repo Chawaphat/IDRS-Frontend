@@ -8,6 +8,7 @@ import { vdoEvaluationService } from "@/services/vdoEvaluationService";
 import type { VdoEvaluationUpdate, FacialConditionType, BiteType } from "@/services/types/vdoEvaluation";
 import { SectionNotes } from "./components/SectionNotes";
 import { useSectionSave } from "@/hooks/useSectionSave";
+import { ToothLoaderIcon } from "@/components/ui/ToothLoader";
 
 interface VdoEvaluationFormProps {
   chartId: string;
@@ -103,7 +104,7 @@ export default function VdoEvaluationForm({ chartId }: VdoEvaluationFormProps) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="w-8 h-8 border-4 border-teal-100 border-t-teal-500 rounded-full animate-spin" />
+        <ToothLoaderIcon className="w-12 h-12" />
       </div>
     );
   }

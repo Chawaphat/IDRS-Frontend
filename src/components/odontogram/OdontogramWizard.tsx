@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, RotateCcw, Pencil, Minus } from "lucide-react";
+import {
+  ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Pencil, Minus,
+} from "lucide-react";
 import {
   canBePrimaryTooth,
   defaultState,
@@ -133,13 +135,59 @@ function rootCanalToEndo(status: RootCanalStatus) {
   return "none";
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const SECTION_TONES = {
+  amber: { ring: "hover:border-amber-200" },
+  blue: { ring: "hover:border-blue-200" },
+  orange: { ring: "hover:border-orange-200" },
+  rose: { ring: "hover:border-rose-200" },
+  teal: { ring: "hover:border-teal-200" },
+  slate: { ring: "hover:border-slate-300" },
+} as const;
+
+function Section({
+  title,
+  children,
+  defaultOpen = false,
+  hasData = false,
+  tone = "slate",
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  hasData?: boolean;
+  tone?: keyof typeof SECTION_TONES;
+}) {
+  // Sections that already have data start open so existing entries stay visible;
+  // empty ones start collapsed so the wizard doesn't force a long scroll per tooth.
+  const [open, setOpen] = useState(defaultOpen || hasData);
+  const colors = SECTION_TONES[tone];
+
   return (
-    <section className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
-      </div>
-      <div className="p-4 space-y-5">{children}</div>
+    <section className={cx(
+      "rounded-xl border bg-white shadow-sm overflow-hidden transition-colors",
+      open ? "border-slate-300" : "border-slate-200",
+      colors.ring
+    )}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cx(
+          "w-full flex items-center justify-between gap-3 px-4 py-3 transition-colors",
+          open ? "bg-white border-b border-slate-100" : "bg-slate-50/70 hover:bg-slate-100"
+        )}
+      >
+        <span className="flex items-center gap-2.5">
+          <h3 className="text-sm font-bold tracking-tight text-slate-800">{title}</h3>
+          {hasData && (
+            <span className="flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+              Filled
+            </span>
+          )}
+        </span>
+        <ChevronDown size={16} className={cx("text-slate-400 transition-transform shrink-0", open && "rotate-180")} />
+      </button>
+      {open && <div className="p-4 space-y-5">{children}</div>}
     </section>
   );
 }
@@ -402,7 +450,7 @@ function CariesSection({ toothNo, state }: { toothNo: number; state: ToothState 
   const activeData = activeSurface ? state.caries_data.find(d => d.surface === activeSurface) : null;
 
   return (
-    <Section title="Caries">
+    <Section title="Caries" tone="amber" hasData={state.caries_data.length > 0}>
       <div className="grid grid-cols-[210px_minmax(0,260px)] gap-5 items-stretch">
         {/* Left: + pad */}
         <div className="flex flex-col gap-2">
@@ -493,7 +541,7 @@ function FillingSection({ toothNo, state, isPrimary }: { toothNo: number; state:
     : state.filling_data.map(d => d.surface);
 
   return (
-    <Section title="Filling">
+    <Section title="Filling" tone="blue" hasData={state.filling_data.length > 0}>
       <div className="flex flex-col gap-4">
         <StepIndicator 
           steps={["Select Material", "Surfaces"]} 
@@ -563,7 +611,11 @@ function PeriodontalSection({ toothNo, state }: { toothNo: number; state: ToothS
   ];
 
   return (
-    <Section title="Periodontal">
+    <Section
+      title="Periodontal"
+      tone="orange"
+      hasData={state.mobility !== "none" || !!state.recession_mm || !!state.periodontalNote}
+    >
       <FieldGroup label="Mobility Grade">
         <div className="flex flex-wrap gap-2">
           {mobility.map((item) => (
@@ -603,7 +655,11 @@ function VitalitySection({ toothNo, state }: { toothNo: number; state: ToothStat
   ];
 
   return (
-    <Section title="Vitality">
+    <Section
+      title="Vitality"
+      tone="rose"
+      hasData={state.pulpInflam || state.ept_result !== "none" || state.root_canal !== "no-endo" || !!state.vitalityNote}
+    >
       <FieldGroup label="Pulp Status">
         <div className="flex flex-wrap gap-2">
           <Chip
@@ -692,7 +748,7 @@ function RestorationSection({ toothNo, state, isPrimary }: { toothNo: number; st
   });
 
   return (
-    <Section title="Restoration">
+    <Section title="Restoration" tone="teal" hasData={state.restorationType !== "none" || state.postCore}>
       {!isPrimary && (
         <FieldGroup label="Foundation" className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -800,7 +856,14 @@ function OthersSection({ toothNo, state, isPrimary }: { toothNo: number; state: 
     [51,52,53,61,62,63,71,72,73,81,82,83].includes(toothNo);
 
   return (
-    <Section title="Others">
+    <Section
+      title="Others"
+      tone="slate"
+      hasData={
+        state.fissureSealing || state.bruxismWear || state.contactMesial || state.contactDistal ||
+        hasFracture || state.extractionPlan || !!state.othersNote
+      }
+    >
       <FieldGroup label="Additional Findings">
         <div className="flex flex-wrap gap-2">
           <Chip
@@ -894,12 +957,12 @@ function ToothPath({ toothNo, state }: { toothNo: number; state: ToothState }) {
   const isPrimary = state.toothSelection === "milktooth";
   return (
     <div className="space-y-3">
-      <CariesSection toothNo={toothNo} state={state} />
-      <FillingSection toothNo={toothNo} state={state} isPrimary={isPrimary} />
-      <PeriodontalSection toothNo={toothNo} state={state} />
-      <VitalitySection toothNo={toothNo} state={state} />
-      <RestorationSection toothNo={toothNo} state={state} isPrimary={isPrimary} />
-      <OthersSection toothNo={toothNo} state={state} isPrimary={isPrimary} />
+      <CariesSection key={`caries-${toothNo}`} toothNo={toothNo} state={state} />
+      <FillingSection key={`filling-${toothNo}`} toothNo={toothNo} state={state} isPrimary={isPrimary} />
+      <PeriodontalSection key={`periodontal-${toothNo}`} toothNo={toothNo} state={state} />
+      <VitalitySection key={`vitality-${toothNo}`} toothNo={toothNo} state={state} />
+      <RestorationSection key={`restoration-${toothNo}`} toothNo={toothNo} state={state} isPrimary={isPrimary} />
+      <OthersSection key={`others-${toothNo}`} toothNo={toothNo} state={state} isPrimary={isPrimary} />
     </div>
   );
 }
@@ -909,7 +972,7 @@ function EdentulousPath({ toothNo, state }: { toothNo: number; state: ToothState
   const branch = state.toothSelection === "tooth-under-gum" ? "impacted" : state.toothSelection === "none" ? "missing" : "none";
 
   return (
-    <Section title="Edentulous area">
+    <Section title="Edentulous area" defaultOpen>
       <div className="flex flex-col gap-4">
         <StepIndicator 
           steps={["Cause", branch === "missing" ? "Status" : branch === "impacted" ? "Plan" : "Details"]} 
@@ -1013,7 +1076,7 @@ function ImplantPath({ toothNo, state }: { toothNo: number; state: ToothState })
   });
 
   return (
-    <Section title="Implant">
+    <Section title="Implant" defaultOpen>
       <div className="flex flex-col gap-4">
         <StepIndicator 
           steps={["Brand", "Component", "Prosthetics"]} 
@@ -1081,7 +1144,7 @@ function ImplantPath({ toothNo, state }: { toothNo: number; state: ToothState })
           <TextInput
             label="5. Crown Brand/Lab"
             value={state.crown_brand}
-            placeholder="e.g. Nobel Biocare"
+            placeholder="e.g. HEXA"
             onChange={(value) => update((draft) => { draft.crown_brand = value; })}
           />
         </>
@@ -1126,9 +1189,10 @@ function StatusChoice({
 
 interface OdontogramWizardProps {
   chartId?: string;
+  onGoToImageGallery?: () => void;
 }
 
-export function OdontogramWizard({ chartId }: OdontogramWizardProps) {
+export function OdontogramWizard({ chartId, onGoToImageGallery }: OdontogramWizardProps) {
   const [snapshot, setSnapshot] = useState<OdontogramSnapshot>(() => getOdontogramSnapshot());
   const [step, setStep] = useState<1 | 2>(1);
   const [path, setPath] = useState<WizardPath>("tooth");
@@ -1222,7 +1286,7 @@ export function OdontogramWizard({ chartId }: OdontogramWizardProps) {
       <div className="flex-1 overflow-y-auto p-4">
         {step === 1 ? (
           <div className="space-y-3">
-            <Section title="Base Status">
+            <Section title="Base Status" defaultOpen>
               <FieldGroup label="Select Tooth Status">
                 <div className="grid grid-cols-1 gap-2">
                   <StatusChoice onClick={() => chooseBase("tooth", "tooth-base")}>Permanent tooth</StatusChoice>
@@ -1250,7 +1314,7 @@ export function OdontogramWizard({ chartId }: OdontogramWizardProps) {
           </div>
         )}
 
-        <AISuggestionPanel chartId={chartId} toothNo={toothNo} />
+        <AISuggestionPanel chartId={chartId} toothNo={toothNo} onGoToImageGallery={onGoToImageGallery} />
       </div>
     </div>
   );

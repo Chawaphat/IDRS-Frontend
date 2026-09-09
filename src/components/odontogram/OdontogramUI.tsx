@@ -31,6 +31,9 @@ type AppProps = {
   onNumberingChange?: (system: NumberingSystem) => void;
   themeConfig?: OdontogramThemeConfig;
   chartId?: string;
+  onNext?: () => void;
+  nextLabel?: string;
+  onGoToImageGallery?: () => void;
 };
 
 const NUMBERING_OPTIONS: { value: NumberingSystem; labelKey: string }[] = [
@@ -46,6 +49,9 @@ export default function OdontogramUI({
   onNumberingChange,
   themeConfig,
   chartId,
+  onNext,
+  nextLabel,
+  onGoToImageGallery,
 }: AppProps) {
   const { t } = useI18n({ language, onLanguageChange });
   const [internalNumbering, setInternalNumbering] = useState<NumberingSystem>(numberingSystem ?? "FDI");
@@ -142,6 +148,19 @@ export default function OdontogramUI({
           {t("topbar.importStatus")}
         </button>
         <input id="statusImportInput" type="file" accept="application/json" hidden />
+
+        {onNext && (
+          <button
+            type="button"
+            onClick={onNext}
+            className="ml-1 flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-700"
+          >
+            {nextLabel ?? "Next"}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -186,7 +205,7 @@ export default function OdontogramUI({
             </div>
           </div>
 
-          <div className="relative flex-1 overflow-y-auto bg-white">
+          <div className="relative flex-1 overflow-y-auto bg-white flex flex-col">
             <div
               id="toothGrid"
               aria-label={t("chart.aria.toothGrid")}
@@ -198,7 +217,7 @@ export default function OdontogramUI({
         </section>
 
         <aside className="flex w-[42%] min-w-0 flex-col overflow-hidden bg-slate-50">
-          <OdontogramWizard chartId={chartId} />
+          <OdontogramWizard chartId={chartId} onGoToImageGallery={onGoToImageGallery} />
         </aside>
       </div>
     </div>

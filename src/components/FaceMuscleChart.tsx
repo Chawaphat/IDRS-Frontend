@@ -58,14 +58,15 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
             {/* Visualizations Panel (Top) */}
             <div className="flex flex-col w-full max-w-5xl mx-auto">
                 <div className="grid grid-cols-3 gap-4 sm:gap-8 w-full items-center">
-                    {/* Right Side View (Flipped) */}
+                    {/* Right Side View — the source asset already depicts the skull's right
+                        side (face points right), so this panel renders it unflipped. */}
                     <div className="w-full flex flex-col">
                         <div className="text-center text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 sm:mb-3">Right Side</div>
                         <div className="relative w-full rounded-2xl overflow-hidden shadow-sm bg-white border border-slate-100" style={{ aspectRatio: '1/1' }}>
-                            <div className="absolute inset-0 w-full h-full -scale-x-100">
-                                <img 
-                                    src="/face-svgs/Sideview pure.png" 
-                                    alt="Face Right Side" 
+                            <div className="absolute inset-0 w-full h-full">
+                                <img
+                                    src="/face-svgs/Sideview pure.png"
+                                    alt="Face Right Side"
                                     className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                                 />
                                 {SIDEVIEW_MUSCLE_AREAS.map((muscle) => {
@@ -84,7 +85,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                 height: muscle.height,
                                                 filter: active ? 'drop-shadow(0 0 2px rgba(239,68,68,0.5))' : 'none'
                                             }}
-                                            title={`Right ${muscle.id}`}
+                                            aria-label={`Right ${muscle.id}`}
                                         >
                                             <div
                                                 className={cn(
@@ -109,7 +110,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                     } : {}}
                                                 />
                                             </div>
-                                            <TooltipLabel text={`${formatMuscleName(activeId)} (Right)`} flipped />
+                                            <TooltipLabel text={`${formatMuscleName(activeId)} (Right)`} />
                                         </button>
                                     );
                                 })}
@@ -142,7 +143,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                             height: muscle.height,
                                             filter: active ? 'drop-shadow(0 0 2px rgba(239,68,68,0.5))' : 'none'
                                         }}
-                                        title={muscle.id}
+                                        aria-label={muscle.id}
                                     >
                                         <div
                                             className={cn(
@@ -174,14 +175,15 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                         </div>
                     </div>
 
-                    {/* Left Side View */}
+                    {/* Left Side View — mirror the same asset so the face points left,
+                        matching the skull's left side. */}
                     <div className="w-full flex flex-col">
                         <div className="text-center text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 sm:mb-3">Left Side</div>
                         <div className="relative w-full rounded-2xl overflow-hidden shadow-sm bg-white border border-slate-100" style={{ aspectRatio: '1/1' }}>
-                            <div className="absolute inset-0 w-full h-full">
-                                <img 
-                                    src="/face-svgs/Sideview pure.png" 
-                                    alt="Face Left Side" 
+                            <div className="absolute inset-0 w-full h-full -scale-x-100">
+                                <img
+                                    src="/face-svgs/Sideview pure.png"
+                                    alt="Face Left Side"
                                     className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                                 />
                                 {SIDEVIEW_MUSCLE_AREAS.map((muscle) => {
@@ -200,7 +202,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                 height: muscle.height,
                                                 filter: active ? 'drop-shadow(0 0 2px rgba(239,68,68,0.5))' : 'none'
                                             }}
-                                            title={`Left ${muscle.id}`}
+                                            aria-label={`Left ${muscle.id}`}
                                         >
                                             <div
                                                 className={cn(
@@ -225,7 +227,7 @@ export function FaceMuscleChart({ selectedMuscles, onToggleMuscle }: FaceMuscleC
                                                     } : {}}
                                                 />
                                             </div>
-                                            <TooltipLabel text={`${formatMuscleName(activeId)} (Left)`} />
+                                            <TooltipLabel text={`${formatMuscleName(activeId)} (Left)`} flipped />
                                         </button>
                                     );
                                 })}

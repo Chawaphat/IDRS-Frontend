@@ -9,6 +9,7 @@ import { SectionNotes } from './components/SectionNotes';
 import { estheticEvaluationService, type EstheticEvaluationPayload } from '@/services/estheticEvaluationService';
 import { useToastStore } from '@/store/toastStore';
 import { useSectionSave } from '@/hooks/useSectionSave';
+import { ToothLoaderIcon } from '@/components/ui/ToothLoader';
 
 interface EstheticEvaluationProps {
     chartId: string;
@@ -32,8 +33,6 @@ interface LocalEstheticState {
     midlineIncisors: string;
     buccalCorridor: string;
     fvSound: string;
-    sSoundMm: string;
-    sSoundRef: string;
     note: string;
 }
 
@@ -54,8 +53,6 @@ const DEFAULT_STATE: LocalEstheticState = {
     midlineIncisors: 'straight',
     buccalCorridor: 'normal',
     fvSound: 'yes',
-    sSoundMm: '',
-    sSoundRef: '',
     note: '',
 };
 
@@ -94,8 +91,6 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                         midlineIncisors: estheticData.dentofacial_analysis?.midline_incisors || 'straight',
                         buccalCorridor: estheticData.dentofacial_analysis?.buccal_corridor || 'normal',
                         fvSound: estheticData.fv_sound !== null ? (estheticData.fv_sound ? 'yes' : 'no') : 'yes',
-                        sSoundMm: estheticData.closest_speaking?.toString() || '',
-                        sSoundRef: estheticData.reference_teeth ? estheticData.reference_teeth.join(', ') : '',
                         note: estheticData.note || '',
                     };
                     setFormData(mapped);
@@ -119,8 +114,6 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                             lower_tooth_exposure: d.toothExpLower ? parseFloat(d.toothExpLower) : null,
                             nasolabial_angle: d.nasolabialAngle,
                             fv_sound: d.fvSound === 'yes',
-                            closest_speaking: d.sSoundMm ? parseFloat(d.sSoundMm) : null,
-                            reference_teeth: d.sSoundRef ? d.sSoundRef.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : null,
                             dentofacial_analysis: {
                                 smile_line: d.smileLine,
                                 incisal_curve: d.incisalCurve,
@@ -155,8 +148,8 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center py-20 text-teal-600">
-                <Loader2 className="w-8 h-8 animate-spin" />
+            <div className="flex justify-center items-center py-20">
+                <ToothLoaderIcon className="w-12 h-12" />
             </div>
         );
     }
@@ -209,14 +202,17 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                             <div className="grid grid-cols-3 gap-2 flex-1 w-full">
                                 {[
-                                    { id: 'symmetric', label: 'Symmetric' },
-                                    { id: 'right_shift', label: 'Right Shift' },
-                                    { id: 'left_shift', label: 'Left Shift' }
+                                    { id: 'symmetric', label: 'Symmetric', imagePath: '/Dentofacial Analysis/Midline Symmetric.png' },
+                                    { id: 'right_shift', label: 'Right Shift', imagePath: '/Dentofacial Analysis/Midline Right Shift.png' },
+                                    { id: 'left_shift', label: 'Left Shift', imagePath: '/Dentofacial Analysis/Midline Left Shift.png' }
                                 ].map(opt => (
-                                    <TextCard
+                                    <VisualCard
                                         key={opt.id}
+                                        id={opt.id}
                                         label={opt.label}
+                                        imagePath={opt.imagePath}
                                         isSelected={formData.facialMidline === opt.id}
+                                        iconClassName="w-full h-24 sm:h-28 object-contain"
                                         onClick={() => {
                                             updateField('facialMidline', opt.id);
                                             if (opt.id === 'symmetric') updateField('facialMidlineMm', '');
@@ -250,29 +246,25 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                     <h3 className="font-semibold text-slate-800">2. Lip at Rest</h3>
                 </div>
                 <div className="p-6 flex flex-col gap-8">
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row items-center gap-6">
-                        <div className="w-full sm:w-1/3 shrink-0">
-                            <img
-                                src="/LipLenght.png"
-                                alt="Lip length measurement guide"
-                                className="w-full h-auto rounded-lg object-contain bg-white border border-slate-100 shadow-sm"
-                            />
-                        </div>
-                        <div className="flex-1 space-y-2 text-center sm:text-left">
-                            <Label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Lip Measurement Guide</Label>
-                            <p className="text-sm text-slate-600 leading-relaxed">
-                                Measure from <b>subnasale</b> (base of nose) to <b>stomion</b> (bottom edge of upper lip). Record in millimeters.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-[1.7fr_1fr] gap-8 pt-2">
                         <div className="space-y-6">
                             <div className="space-y-3">
                                 <Label className="text-sm font-bold text-slate-700">Lip Fullness</Label>
                                 <div className="grid grid-cols-3 gap-2">
-                                    {['Full', 'Average', 'Thin'].map(opt => (
-                                        <TextCard key={opt} label={opt} isSelected={formData.lipFullness === opt.toLowerCase()} onClick={() => updateField('lipFullness', opt.toLowerCase())} />
+                                    {[
+                                        { label: 'Full', imagePath: '/Dentofacial Analysis/Lip Fullness Full.png' },
+                                        { label: 'Average', imagePath: '/Dentofacial Analysis/Lip Fullness Average.png' },
+                                        { label: 'Thin', imagePath: '/Dentofacial Analysis/Lip Fullness Thin.jpeg' },
+                                    ].map(opt => (
+                                        <VisualCard
+                                            key={opt.label}
+                                            id={opt.label.toLowerCase()}
+                                            label={opt.label}
+                                            imagePath={opt.imagePath}
+                                            isSelected={formData.lipFullness === opt.label.toLowerCase()}
+                                            iconClassName="w-full h-28 sm:h-32 object-contain"
+                                            onClick={() => updateField('lipFullness', opt.label.toLowerCase())}
+                                        />
                                     ))}
                                 </div>
                             </div>
@@ -316,6 +308,22 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row items-center gap-6">
+                        <div className="w-full sm:w-1/3 shrink-0">
+                            <img
+                                src="/LipLenght.png"
+                                alt="Lip length measurement guide"
+                                className="w-full h-auto rounded-lg object-contain bg-white border border-slate-100 shadow-sm"
+                            />
+                        </div>
+                        <div className="flex-1 space-y-2 text-center sm:text-left">
+                            <Label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Lip Measurement Guide</Label>
+                            <p className="text-sm text-slate-600 leading-relaxed">
+                                Measure from the base of the nose to the bottom edge of the upper lip. Record in millimeters.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -375,7 +383,7 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                             <VisualCard id="6" label="6 Teeth" imagePath="/Dentofacial Analysis/6.jpeg" isSelected={formData.teethExposed === '6'} onClick={() => updateField('teethExposed', '6')} iconClassName="w-full h-24 sm:h-28 object-contain" />
                             <VisualCard id="8" label="8 Teeth" imagePath="/Dentofacial Analysis/8.jpeg" isSelected={formData.teethExposed === '8'} onClick={() => updateField('teethExposed', '8')} iconClassName="w-full h-24 sm:h-28 object-contain" />
                             <VisualCard id="10" label="10 Teeth" imagePath="/Dentofacial Analysis/10.jpeg" isSelected={formData.teethExposed === '10'} onClick={() => updateField('teethExposed', '10')} iconClassName="w-full h-24 sm:h-28 object-contain" />
-                            <VisualCard id="16" label="16 Teeth" imagePath="/Dentofacial Analysis/16.jpeg" isSelected={formData.teethExposed === '16'} onClick={() => updateField('teethExposed', '16')} iconClassName="w-full h-24 sm:h-28 object-contain" />
+                            <VisualCard id="12" label="12 Teeth" imagePath="/Dentofacial Analysis/12.jpeg" isSelected={formData.teethExposed === '12'} onClick={() => updateField('teethExposed', '12')} iconClassName="w-full h-24 sm:h-28 object-contain" />
                         </div>
                     </div>
 
@@ -422,8 +430,8 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                     <Mic2 className="w-5 h-5 text-amber-500" />
                     <h3 className="font-semibold text-slate-800">4. Phonetics</h3>
                 </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    <div className="space-y-4">
+                <div className="p-6">
+                    <div className="space-y-4 max-w-md">
                         <div className="flex flex-col gap-2">
                             <Label className="text-base font-bold text-slate-800">F-V Sound</Label>
                             <span className="text-sm text-slate-500">Incisal edge of maxillary centrals on wet/dry line of lower lip?</span>
@@ -437,26 +445,6 @@ export default function EstheticEvaluation({ chartId }: EstheticEvaluationProps)
                             ]}
                             name="fvSound"
                         />
-                    </div>
-
-                    <div className="space-y-4 md:border-l md:border-slate-100 md:pl-8">
-                        <Label className="text-base font-bold text-slate-800">Closest speaking space (S Sound)</Label>
-                        <div className="space-y-4 pt-1">
-                            <div className="relative w-full">
-                                <Input
-                                    type="number"
-                                    value={formData.sSoundMm}
-                                    onChange={(e) => updateField('sSoundMm', e.target.value)}
-                                    className="pr-10 border-slate-200 focus-visible:ring-amber-500"
-                                    placeholder="e.g. 2"
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-semibold">mm</span>
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-400 uppercase">Reference Teeth</Label>
-                                <Input value={formData.sSoundRef} onChange={e => updateField('sSoundRef', e.target.value)} className="bg-white focus-visible:ring-amber-500" placeholder="e.g., 11, 21, 31, 41" />
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>

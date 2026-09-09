@@ -57,7 +57,12 @@ export default function PatientProfilePage() {
 
   const [images, setImages] = useState<ImageManagement[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
+  // Charts whose images failed to load — surfaced as a banner instead of
+  // being silently swallowed, since "no images" and "failed to load" must
+  // never look the same in a clinical record system.
+  const [imagesLoadFailedCount, setImagesLoadFailedCount] = useState(0);
   const [imageFilter, setImageFilter] = useState<ImageFilter>('all');
+  const [overviewImageTab, setOverviewImageTab] = useState<ImageFilter>('all');
   const [zoomImage, setZoomImage] = useState<ImageManagement | null>(null);
 
   // Upload-from-Directory state — images are chart-scoped on the backend, so
@@ -172,13 +177,20 @@ export default function PatientProfilePage() {
   const fetchImages = async (chartsList: DentalChart[]) => {
     try {
       setLoadingImages(true);
-      const imagesPromises = chartsList.map(chart => 
-        patientService.getChartImages(chart.chart_id).catch(() => [] as ImageManagement[])
+      let failedCount = 0;
+      const imagesPromises = chartsList.map(chart =>
+        patientService.getChartImages(chart.chart_id).catch((err) => {
+          console.error(`Failed to load images for chart ${chart.chart_id}`, err);
+          failedCount += 1;
+          return [] as ImageManagement[];
+        })
       );
       const results = await Promise.all(imagesPromises);
       setImages(results.flat());
+      setImagesLoadFailedCount(failedCount);
     } catch (err) {
       console.error("Failed to load images", err);
+      setImagesLoadFailedCount(chartsList.length);
     } finally {
       setLoadingImages(false);
     }
@@ -770,7 +782,7 @@ export default function PatientProfilePage() {
 
                         {/* Bottom Row: Recent Images — most recently uploaded across every chart */}
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col shrink-0 mb-6">
-                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 shrink-0">
+                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-800">Images Overview</h3>
                                     <p className="text-sm text-slate-500 mt-0.5">X-ray Photos & Intraoral Photos</p>
@@ -799,11 +811,21 @@ export default function PatientProfilePage() {
                                 </div>
                             </div>
 
+                            {!loadingImages && imagesLoadFailedCount > 0 && (
+                                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-xl px-3.5 py-2.5 mb-4">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                    Images from {imagesLoadFailedCount} visit{imagesLoadFailedCount !== 1 ? 's' : ''} could not be loaded — some images below may be missing.
+                                </div>
+                            )}
+
                             {loadingImages ? (
-                                <div className="grid grid-cols-4 auto-rows-[84px] gap-3" style={{ gridAutoFlow: 'dense' }}>
-                                    {Array.from({ length: 6 }).map((_, i) => (
-                                        <div key={i} className={cn("rounded-xl bg-slate-100 animate-pulse", i === 0 && "col-span-2 row-span-2")} />
-                                    ))}
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                    <div className="sm:col-span-2 aspect-[2/1] rounded-xl bg-slate-100 animate-pulse" />
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="aspect-square rounded-lg bg-slate-100 animate-pulse" />
+                                        <div className="aspect-square rounded-lg bg-slate-100 animate-pulse" />
+                                        <div className="aspect-square rounded-lg bg-slate-100 animate-pulse" />
+                                    </div>
                                 </div>
                             ) : images.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center text-center py-10">
@@ -814,51 +836,106 @@ export default function PatientProfilePage() {
                                     <p className="text-xs text-slate-400 mt-1">Photos and X-rays uploaded to any chart will appear here.</p>
                                 </div>
                             ) : (() => {
-                                const recentImages = [...images]
-                                    .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
-                                    .slice(0, 6);
-                                const count = recentImages.length;
-                                // Fixed 4-column bento only makes sense once there are enough images
-                                // to fill it — with 1 or 2, size cells to fill the row instead of
-                                // leaving dead space to the right.
-                                const cols = count === 1 ? 1 : count === 2 ? 2 : 4;
+                                // Same split as the Dental Status "Image References" panel: the
+                                // panoramic X-ray as a hero tile, intraoral photos as a thumbnail
+                                // grid, filterable by type instead of one mixed bento of both.
+                                const byRecency = (a: ImageManagement, b: ImageManagement) =>
+                                    new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+                                const intraoral = images.filter(i => i.image_type === 'intraoral').sort(byRecency);
+                                const panoramic = images.filter(i => i.image_type === 'panoramic_xray').sort(byRecency)[0];
+
+                                const tabs: { id: ImageFilter; label: string; count: number }[] = [
+                                    { id: 'all', label: 'All', count: images.length },
+                                    { id: 'intraoral', label: 'Intraoral', count: intraoral.length },
+                                    { id: 'panoramic_xray', label: 'Panoramic X-Ray', count: panoramic ? 1 : 0 },
+                                ];
+                                const showIntraoral = overviewImageTab === 'all' || overviewImageTab === 'intraoral';
+                                const showPanoramic = overviewImageTab === 'all' || overviewImageTab === 'panoramic_xray';
+                                const intraoralShown = intraoral.slice(0, overviewImageTab === 'intraoral' ? 12 : 5);
 
                                 return (
-                                    <div
-                                        className={cn("grid gap-3 auto-rows-[84px]", cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-4")}
-                                        style={{ gridAutoFlow: 'dense' }}
-                                    >
-                                        {recentImages.map((img, i) => (
-                                            <button
-                                                key={img.image_id}
-                                                type="button"
-                                                onClick={() => setZoomImage(img)}
-                                                className={cn(
-                                                    "group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-200 transition-all hover:shadow-md hover:-translate-y-0.5",
-                                                    count === 1 && "row-span-3",
-                                                    count === 2 && "row-span-3",
-                                                    count >= 3 && i === 0 && "col-span-2 row-span-2"
-                                                )}
-                                            >
-                                                <img
-                                                    src={img.image_url}
-                                                    alt={img.description || "Clinical image"}
-                                                    className="w-full h-full object-contain"
-                                                    loading="lazy"
-                                                />
-                                                <span className={cn(
-                                                    "absolute top-1.5 left-1.5 bg-white/90 text-slate-600 font-bold px-1.5 py-0.5 rounded-full",
-                                                    i === 0 ? "text-[10px]" : "text-[9px]"
-                                                )}>
-                                                    {img.image_type === 'panoramic_xray' ? 'Pano' : img.image_type === 'intraoral' ? 'Intra' : 'Other'}
-                                                </span>
-                                                {i === 0 && (
-                                                    <span className="absolute bottom-1.5 left-1.5 bg-teal-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                                                        Latest
-                                                    </span>
-                                                )}
-                                            </button>
-                                        ))}
+                                    <div className="space-y-3">
+                                        <div className="flex justify-end">
+                                            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                                                {tabs.map(t => (
+                                                    <button
+                                                        key={t.id}
+                                                        type="button"
+                                                        onClick={() => setOverviewImageTab(t.id)}
+                                                        className={cn(
+                                                            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                                                            overviewImageTab === t.id ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
+                                                        )}
+                                                    >
+                                                        {t.label}
+                                                        <span className={overviewImageTab === t.id ? "text-slate-300" : "text-slate-400"}>{t.count}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                            {showPanoramic && (
+                                                <div className="sm:col-span-2">
+                                                    <div className="mb-1.5 flex items-center justify-between">
+                                                        <p className="text-xs font-semibold text-slate-500">Panoramic X-Ray</p>
+                                                        {panoramic && (
+                                                            <span className="bg-teal-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Latest</span>
+                                                        )}
+                                                    </div>
+                                                    {!panoramic ? (
+                                                        <div className="flex aspect-[2/1] w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100 text-xs font-medium text-slate-400">
+                                                            No panoramic X-ray yet
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setZoomImage(panoramic)}
+                                                            className="group relative aspect-[2/1] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                                                        >
+                                                            <img
+                                                                src={panoramic.image_url}
+                                                                alt={panoramic.description || "Panoramic X-ray"}
+                                                                className="h-full w-full object-contain transition-transform group-hover:scale-[1.03]"
+                                                                loading="lazy"
+                                                            />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {showIntraoral && (
+                                                <div className={overviewImageTab === 'intraoral' ? "sm:col-span-3" : ""}>
+                                                    <div className="mb-1.5 flex items-center justify-between">
+                                                        <p className="text-xs font-semibold text-slate-500">Intraoral</p>
+                                                        {intraoral.length > 0 && <span className="text-[10px] font-bold text-slate-400">{intraoral.length}</span>}
+                                                    </div>
+                                                    {intraoral.length === 0 ? (
+                                                        <div className="flex aspect-[2/1] w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100 text-xs font-medium text-slate-400">
+                                                            No intraoral photos yet
+                                                        </div>
+                                                    ) : (
+                                                        <div className={cn("grid gap-2", overviewImageTab === 'intraoral' ? "grid-cols-4 sm:grid-cols-6" : "grid-cols-3")}>
+                                                            {intraoralShown.map(img => (
+                                                                <button
+                                                                    key={img.image_id}
+                                                                    type="button"
+                                                                    onClick={() => setZoomImage(img)}
+                                                                    className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-950 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                                                                >
+                                                                    <img
+                                                                        src={img.image_url}
+                                                                        alt={img.description || "Intraoral photo"}
+                                                                        className="h-full w-full object-contain transition-transform group-hover:scale-[1.05]"
+                                                                        loading="lazy"
+                                                                    />
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })()}
@@ -1018,6 +1095,13 @@ export default function PatientProfilePage() {
                                 </button>
                             </div>
                         </div>
+
+                        {!loadingImages && imagesLoadFailedCount > 0 && (
+                            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-xl px-3.5 py-2.5 mb-4 shrink-0">
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                Images from {imagesLoadFailedCount} visit{imagesLoadFailedCount !== 1 ? 's' : ''} could not be loaded — some images below may be missing.
+                            </div>
+                        )}
 
                         {/* Category filter */}
                         <div className="flex gap-2 mb-5 shrink-0 flex-wrap">

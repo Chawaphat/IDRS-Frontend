@@ -1,24 +1,37 @@
-import { useEffect, useState, type ComponentType } from "react";
-import { FileImage, ScanLine, Sparkles, X } from "lucide-react";
-import { imageManagementService } from "@/services/imageManagementService";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { Eye, EyeOff, FileImage, ScanLine, Sparkles, X, Images } from "lucide-react";
+import { imageManagementService, onChartImagesChanged } from "@/services/imageManagementService";
 import { aiDetectionResultService } from "@/services/aiDetectionResultService";
 import type { ImageManagement } from "@/services/patientService";
+import { diseaseColor, type AIDetectResult } from "@/lib/aiDetection";
 
 interface ImageReferencePanelProps {
   chartId?: string;
 }
 
+type FilterTab = "all" | "intraoral" | "panoramic_xray";
+
+interface RenderRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 /**
- * Read-only quick-reference strip for the chart's clinical images, shown
+ * Read-only quick-reference gallery for the chart's clinical images, shown
  * below the tooth grid while charting. Not an upload/manage surface — that's
  * the Image Gallery tab; this is purely "glance at the real photo/X-ray
- * without leaving Dental Status."
+ * without leaving Dental Status." The panoramic X-ray can also overlay its
+ * saved AI detection boxes, toggleable on/off.
  */
 export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
   const [loading, setLoading] = useState(true);
   const [images, setImages] = useState<ImageManagement[]>([]);
-  const [analyzed, setAnalyzed] = useState(false);
+  const [analysesById, setAnalysesById] = useState<Map<string, AIDetectResult>>(new Map());
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+  const [tab, setTab] = useState<FilterTab>("all");
+  const [showAIBoxes, setShowAIBoxes] = useState(true);
 
   useEffect(() => {
     if (!chartId) {
@@ -26,7 +39,7 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
       return;
     }
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       setLoading(true);
       try {
         const [imgs, analyses] = await Promise.all([
@@ -35,16 +48,21 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
         ]);
         if (cancelled) return;
         setImages(imgs);
-        const pano = imgs.find((i) => i.image_type === "panoramic_xray");
-        setAnalyzed(!!pano && analyses.some((a) => a.image_id === pano.image_id));
+        setAnalysesById(new Map(analyses.map((a) => [a.image_id, a.detection_data])));
       } catch (err) {
         console.error("Failed to load image references:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+    load();
+    // The Dental Status tab stays mounted (hidden, not unmounted) once visited, so a
+    // plain chartId-keyed effect won't pick up uploads/deletes made from Image Gallery
+    // afterwards. Re-fetch whenever this chart's images change anywhere in the app.
+    const unsubscribe = onChartImagesChanged(chartId, load);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [chartId]);
 
@@ -58,85 +76,134 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [zoomUrl]);
 
-  const intraoral = images.filter((i) => i.image_type === "intraoral");
-  const panoramic = images.find((i) => i.image_type === "panoramic_xray");
+  const intraoral = useMemo(() => images.filter((i) => i.image_type === "intraoral"), [images]);
+  const panoramic = useMemo(() => images.find((i) => i.image_type === "panoramic_xray"), [images]);
+  const panoramicResult = panoramic ? analysesById.get(panoramic.image_id) ?? null : null;
+
+  const tabs: { id: FilterTab; label: string; count: number }[] = [
+    { id: "all", label: "All", count: images.length },
+    { id: "intraoral", label: "Intraoral", count: intraoral.length },
+    { id: "panoramic_xray", label: "Panoramic X-Ray", count: panoramic ? 1 : 0 },
+  ];
+
+  const showIntraoral = tab === "all" || tab === "intraoral";
+  const showPanoramic = tab === "all" || tab === "panoramic_xray";
+  // When only one column is visible, let it use the full row instead of
+  // leaving the other grid track empty.
+  const onlyPanoramic = showPanoramic && !showIntraoral;
+  const onlyIntraoral = showIntraoral && !showPanoramic;
 
   return (
-    <div className="mt-auto flex w-full flex-col gap-3 border-t border-slate-100 bg-slate-50/50 p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-[13px] font-bold uppercase tracking-wide text-slate-700">Image References</p>
-        {!loading && images.length > 0 && (
-          <span className="text-[11px] font-semibold text-slate-400">
-            {images.length} image{images.length !== 1 ? "s" : ""}
-          </span>
-        )}
+    <div className="mt-auto flex-1 flex w-full flex-col gap-4 border-t border-slate-100 bg-slate-50/50 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Images className="h-4 w-4 text-slate-400" />
+          <p className="text-[13px] font-bold uppercase tracking-wide text-slate-700">Image References</p>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                tab === t.id ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              {t.label}
+              <span className={`text-[10px] ${tab === t.id ? "text-slate-300" : "text-slate-400"}`}>{t.count}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex h-[180px] flex-row gap-4">
-        {/* Intraoral — horizontal scroll strip, can hold many photos */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500">Intraoral</p>
-            {intraoral.length > 0 && <span className="text-[10px] font-bold text-slate-400">{intraoral.length}</span>}
-          </div>
-          {loading ? (
-            <SkeletonBox />
-          ) : intraoral.length === 0 ? (
-            <EmptyBox icon={ScanLine} label="No intraoral photos yet" />
-          ) : (
-            <div className="flex h-full w-full gap-2 overflow-x-auto rounded-xl">
-              {intraoral.map((img) => (
-                <button
-                  key={img.image_id}
-                  type="button"
-                  onClick={() => img.image_url && setZoomUrl(img.image_url)}
-                  disabled={!img.image_url}
-                  className="relative h-full w-20 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-950 transition-transform hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <img
-                    src={img.image_url}
-                    alt={img.description || "Intraoral photo"}
-                    className="h-full w-full object-contain"
-                    loading="lazy"
-                  />
-                </button>
-              ))}
+      {loading ? (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <SkeletonBox className="aspect-square" />
+          <SkeletonBox className="aspect-square" />
+          <SkeletonBox className="col-span-2 aspect-[2/1] sm:col-span-2" />
+        </div>
+      ) : images.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyBox icon={FileImage} label="No images uploaded for this chart yet" className="h-full py-16" />
+        </div>
+      ) : (
+        <div className="flex-1 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Panoramic — large hero tile, spans 2 columns (or all 3 when it's the only column shown) */}
+          {showPanoramic && (
+            <div className={onlyPanoramic ? "sm:col-span-3" : "sm:col-span-2"}>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-500">Panoramic X-Ray</p>
+                <div className="flex items-center gap-3">
+                  {panoramicResult && (
+                    <>
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-teal-600">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        AI Analyzed
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAIBoxes((v) => !v)}
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                          showAIBoxes
+                            ? "border-slate-300 bg-slate-800 text-white hover:bg-slate-700"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {showAIBoxes ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        {showAIBoxes ? "Hide boxes" : "Show boxes"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              {!panoramic ? (
+                <EmptyBox icon={FileImage} label="No panoramic X-ray yet" className="aspect-[2/1]" />
+              ) : (
+                <PanoramicTile
+                  imageUrl={panoramic.image_url!}
+                  result={showAIBoxes ? panoramicResult : null}
+                  onZoom={() => setZoomUrl(panoramic.image_url!)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Intraoral — thumbnail grid */}
+          {showIntraoral && (
+            <div className={`flex flex-col ${onlyIntraoral ? "sm:col-span-3" : ""}`}>
+              <div className="mb-1.5 flex items-center justify-between shrink-0">
+                <p className="text-xs font-semibold text-slate-500">Intraoral</p>
+                {intraoral.length > 0 && <span className="text-[10px] font-bold text-slate-400">{intraoral.length}</span>}
+              </div>
+              {intraoral.length === 0 ? (
+                <EmptyBox icon={ScanLine} label="No intraoral photos yet" className="flex-1" />
+              ) : (
+                <div className={`grid gap-2 ${onlyIntraoral ? "grid-cols-4 sm:grid-cols-6" : "grid-cols-3"}`}>
+                  {intraoral.map((img) => (
+                    <button
+                      key={img.image_id}
+                      type="button"
+                      onClick={() => img.image_url && setZoomUrl(img.image_url)}
+                      disabled={!img.image_url}
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-950 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                    >
+                      <img
+                        src={img.image_url}
+                        alt={img.description || "Intraoral photo"}
+                        className="h-full w-full object-contain transition-transform group-hover:scale-[1.05]"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Panoramic — one image, shown large */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500">Panoramic X-Ray</p>
-            {analyzed && (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-teal-600">
-                <Sparkles className="h-2.5 w-2.5" />
-                AI
-              </span>
-            )}
-          </div>
-          {loading ? (
-            <SkeletonBox />
-          ) : !panoramic ? (
-            <EmptyBox icon={FileImage} label="No panoramic X-ray yet" />
-          ) : (
-            <button
-              type="button"
-              onClick={() => panoramic.image_url && setZoomUrl(panoramic.image_url)}
-              disabled={!panoramic.image_url}
-              className="h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-950 transition-transform hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <img
-                src={panoramic.image_url}
-                alt={panoramic.description || "Panoramic X-ray"}
-                className="h-full w-full object-contain"
-                loading="lazy"
-              />
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Zoom modal */}
       {zoomUrl && (
@@ -163,15 +230,126 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
   );
 }
 
-function EmptyBox({ icon: Icon, label }: { icon: ComponentType<{ className?: string }>; label: string }) {
+/**
+ * Panoramic hero tile. When an AI result is passed in, draws its color-coded
+ * detection boxes over the X-ray — same object-fit:contain math as
+ * AIDetectionViewer, replicated in miniature since this tile has no
+ * click-to-select / findings list, just a glanceable, toggleable overlay.
+ */
+function PanoramicTile({
+  imageUrl,
+  result,
+  onZoom,
+}: {
+  imageUrl: string;
+  result: AIDetectResult | null;
+  onZoom: () => void;
+}) {
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [renderRect, setRenderRect] = useState<RenderRect | null>(null);
+  const containerRef = useRef<HTMLButtonElement>(null);
+  const naturalSizeRef = useRef<{ w: number; h: number } | null>(null);
+
+  const updateRenderRect = useCallback(() => {
+    if (!containerRef.current || !naturalSizeRef.current) return;
+    const { width: cw, height: ch } = containerRef.current.getBoundingClientRect();
+    const { w: nw, h: nh } = naturalSizeRef.current;
+    if (cw === 0 || ch === 0 || nw === 0 || nh === 0) return;
+    const scale = Math.min(cw / nw, ch / nh);
+    const renderedW = nw * scale;
+    const renderedH = nh * scale;
+    setRenderRect({
+      left: (cw - renderedW) / 2,
+      top: (ch - renderedH) / 2,
+      width: renderedW,
+      height: renderedH,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(() => updateRenderRect());
+    ro.observe(containerRef.current);
+    window.addEventListener("resize", updateRenderRect);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateRenderRect);
+    };
+  }, [updateRenderRect]);
+
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 bg-slate-100 px-2 text-center text-slate-400">
+    <button
+      type="button"
+      onClick={onZoom}
+      ref={containerRef}
+      className="relative aspect-[2/1] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-sm"
+    >
+      <img
+        src={imageUrl}
+        alt="Panoramic X-ray"
+        crossOrigin="anonymous"
+        className="h-full w-full object-contain"
+        loading="lazy"
+        onLoad={(e) => {
+          const el = e.currentTarget;
+          const ns = { w: el.naturalWidth, h: el.naturalHeight };
+          naturalSizeRef.current = ns;
+          setNaturalSize(ns);
+          updateRenderRect();
+        }}
+      />
+      {result && renderRect && naturalSize && (
+        <div className="absolute inset-0">
+          {result.detections.map((d, i) => {
+            const [x1, y1, x2, y2] = d.bbox;
+            const scaleX = renderRect.width / naturalSize.w;
+            const scaleY = renderRect.height / naturalSize.h;
+            const color = diseaseColor(d.disease);
+            return (
+              <div
+                key={i}
+                className="absolute rounded-sm"
+                style={{
+                  left: `${renderRect.left + x1 * scaleX}px`,
+                  top: `${renderRect.top + y1 * scaleY}px`,
+                  width: `${(x2 - x1) * scaleX}px`,
+                  height: `${(y2 - y1) * scaleY}px`,
+                  border: `1.5px solid ${color}`,
+                  boxShadow: "0 0 0 1px rgba(0,0,0,0.15)",
+                }}
+              >
+                <span
+                  className="absolute -top-1.5 -left-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full border border-white px-0.5 text-[8px] font-extrabold leading-none text-white"
+                  style={{ backgroundColor: color }}
+                >
+                  {d.tooth_fdi ?? "?"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function EmptyBox({
+  icon: Icon,
+  label,
+  className = "",
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 bg-slate-100 px-2 py-6 text-center text-slate-400 ${className}`}>
       <Icon className="h-5 w-5" />
       <span className="text-[11px] font-medium leading-tight">{label}</span>
     </div>
   );
 }
 
-function SkeletonBox() {
-  return <div className="h-full w-full animate-pulse rounded-xl bg-slate-200" />;
+function SkeletonBox({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-xl bg-slate-200 ${className}`} />;
 }

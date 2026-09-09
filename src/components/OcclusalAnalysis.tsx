@@ -8,6 +8,7 @@ import { ToggleButtonGroup } from '@/components/ui/ToggleButton';
 import { occlusalAnalysisService, type OcclusalAnalysisPayload, type OcclusalContactType } from '@/services/occlusalAnalysisService';
 import { useToastStore } from '@/store/toastStore';
 import { useSectionSave } from '@/hooks/useSectionSave';
+import { ToothLoaderIcon } from '@/components/ui/ToothLoader';
 import { SectionNotes } from '@/components/chart/components/SectionNotes';
 import {
   Tooltip,
@@ -97,7 +98,7 @@ const LOWER_TEETH = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37,
 const MOCK_EXPLANATIONS: Record<ContactType, string> = {
   premature: "An occlusal contact that occurs before the other teeth reach maximum intercuspation. It can lead to tooth mobility or TMJ issues.",
   mip: "The complete intercuspation of the opposing teeth independent of condylar position. This is the 'habitual' bite.",
-  protrusive: "Contacts that occur when the mandible moves forward from MIP. Ideally, only anterior teeth stroke kontakt.",
+  protrusive: "Contacts that occur when the mandible moves forward from MIP. Ideally, only anterior teeth should be in contact.",
   working: "The side toward which the mandible moves during lateral excursion. Multiple teeth usually contact here in group function.",
   nonWorking: "The side away from which the mandible moves. Contacts here are often considered interferences that can cause trauma.",
 };
@@ -114,6 +115,7 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
 
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingHelp, setLoadingHelp] = useState<Set<string>>(new Set());
+  const [openTooltip, setOpenTooltip] = useState<ContactType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { markDirty, markClean, registerSave } = useSectionSave("occlusal");
@@ -233,6 +235,11 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
   // --- Handlers ---
   const handleHelpClick = async (type: ContactType, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (openTooltip === type) {
+      setOpenTooltip(null);
+      return;
+    }
+    setOpenTooltip(type);
     if (explanations[type]) return;
 
     setLoadingHelp(prev => new Set(prev).add(type));
@@ -250,7 +257,22 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
     setActiveTab(tabId);
     setActiveSelection(null);
     setHoveredPair(null);
+    setOpenTooltip(null);
   };
+
+  // Dismiss the help tooltip on outside click or Escape — it's click-triggered,
+  // not hover, so it needs its own close behavior instead of Radix's hover-out.
+  useEffect(() => {
+    if (!openTooltip) return;
+    const closeIt = () => setOpenTooltip(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeIt(); };
+    document.addEventListener("click", closeIt);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", closeIt);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openTooltip]);
 
   const handleClearAll = () => {
     setSectionPairs({ premature: [], mip: [], protrusive: [], working: [], nonWorking: [] });
@@ -366,8 +388,8 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-20 text-teal-600">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="flex justify-center items-center py-20">
+        <ToothLoaderIcon className="w-12 h-12" />
       </div>
     );
   }
@@ -424,7 +446,7 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
                       <h4 className={cn("text-sm font-bold", isActive ? "text-teal-900" : "text-slate-700")}>
                         {section.label}
                       </h4>
-                      <Tooltip open={!!explanations[section.id] || loadingHelp.has(section.id)}>
+                      <Tooltip open={openTooltip === section.id}>
                         <TooltipTrigger
                           onClick={(e) => handleHelpClick(section.id, e)}
                           className={cn(
@@ -438,7 +460,19 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
                             <HelpCircle className="w-3.5 h-3.5" />
                           )}
                         </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-xs bg-slate-900 text-white border-none p-4 rounded-xl shadow-xl">
+                        <TooltipContent
+                          side="right"
+                          onClick={(e) => e.stopPropagation()}
+                          className="max-w-xs bg-slate-900 text-white border-none p-4 pr-8 rounded-xl shadow-xl relative"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setOpenTooltip(null); }}
+                            className="absolute top-2.5 right-2.5 text-slate-400 hover:text-white transition-colors"
+                            aria-label="Close"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                           {explanations[section.id] || "Fetching explanation..."}
                         </TooltipContent>
                       </Tooltip>
@@ -700,6 +734,16 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
               Angle's Classification
             </h4>
+
+            {/* Reference diagram — Class I / II / III molar relationship */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+              <img
+                src="/classification-malocclusion-angle-diagramme-orthodontie-sherbrooke.jpg"
+                alt="Angle's Classification reference diagram — Class I, Class II, Class III molar relationships"
+                className="w-full h-auto max-h-48 object-contain mx-auto"
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100 shadow-inner">
               <div className="space-y-3">
                 <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Right first molar</Label>
@@ -728,7 +772,7 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
                 />
               </div>
               <div className="space-y-3">
-                <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Right Canine (k9)</Label>
+                <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Right Canine</Label>
                 <ToggleButtonGroup
                   value={angleClass.canineRight}
                   onChange={(v: string) => { setAngleClass(prev => ({ ...prev, canineRight: v })); markDirty(); }}
@@ -741,7 +785,7 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
                 />
               </div>
               <div className="space-y-3">
-                <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Left Canine (k9)</Label>
+                <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider">Left Canine</Label>
                 <ToggleButtonGroup
                   value={angleClass.canineLeft}
                   onChange={(v: string) => { setAngleClass(prev => ({ ...prev, canineLeft: v })); markDirty(); }}

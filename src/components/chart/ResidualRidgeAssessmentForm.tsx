@@ -11,6 +11,7 @@ import {
   type ResidualRidgeAssessmentPayload,
 } from '@/services/residualRidgeAssessmentService';
 import { useSectionSave } from '@/hooks/useSectionSave';
+import { ToothLoaderIcon } from '@/components/ui/ToothLoader';
 import { SectionNotes } from './components/SectionNotes';
 
 interface ResidualRidgeAssessmentFormProps {
@@ -30,11 +31,13 @@ interface LocalResidualRidgeState {
   palatalVault: string;
   palatalThroatForm: string;
   torusPresent: string[];
+  torusSizeMm: string;
   frenumU: string[];
   frenumL: string[];
   ridgeDeformity: string[];
   exostosisDetail: string;
   bonySpiculeDetail: string;
+  flabbyTissueDetail: string;
   tongueSize: string;
   tonguePosition: string;
   amountOfSaliva: string;
@@ -58,11 +61,13 @@ const DEFAULT_STATE: LocalResidualRidgeState = {
   palatalVault: 'Average',
   palatalThroatForm: 'class-i',
   torusPresent: [],
+  torusSizeMm: '',
   frenumU: [],
   frenumL: [],
   ridgeDeformity: [],
   exostosisDetail: '',
   bonySpiculeDetail: '',
+  flabbyTissueDetail: '',
   tongueSize: 'Medium',
   tonguePosition: 'Normal',
   amountOfSaliva: 'Normal',
@@ -129,6 +134,7 @@ const stateFromRecord = (record: ResidualRidgeAssessment | null): LocalResidualR
 
   const frenum = objectFromJson(record.freenum_attachment);
   const ridgeDeformity = objectFromJson(record.ridge_deformity);
+  const torus = objectFromJson(record.torus_palatinus);
 
   return {
     ridgeHeight: labelFromEnum(record.ridge_height, RIDGE_HEIGHT_FROM_API, DEFAULT_STATE.ridgeHeight),
@@ -142,12 +148,14 @@ const stateFromRecord = (record: ResidualRidgeAssessment | null): LocalResidualR
     lowerArchForm: labelFromEnum(record.lower_arch_form, ARCH_FORM_FROM_API, DEFAULT_STATE.lowerArchForm),
     palatalVault: labelFromEnum(record.palatal_vault, PALATAL_VAULT_FROM_API, DEFAULT_STATE.palatalVault),
     palatalThroatForm: labelFromEnum(record.palatal_throat_form, PALATAL_THROAT_FROM_API, DEFAULT_STATE.palatalThroatForm),
-    torusPresent: arrayFromJson(record.torus_palatinus),
+    torusPresent: Array.isArray(record.torus_palatinus) ? arrayFromJson(record.torus_palatinus) : arrayFromJson(torus.selected),
+    torusSizeMm: typeof torus.size_mm === 'string' ? torus.size_mm : '',
     frenumU: arrayFromJson(frenum.upper),
     frenumL: arrayFromJson(frenum.lower),
     ridgeDeformity: Array.isArray(record.ridge_deformity) ? arrayFromJson(record.ridge_deformity) : arrayFromJson(ridgeDeformity.selected),
     exostosisDetail: typeof ridgeDeformity.exostosis_detail === 'string' ? ridgeDeformity.exostosis_detail : '',
     bonySpiculeDetail: typeof ridgeDeformity.bony_spicule_detail === 'string' ? ridgeDeformity.bony_spicule_detail : '',
+    flabbyTissueDetail: typeof ridgeDeformity.flabby_tissue_detail === 'string' ? ridgeDeformity.flabby_tissue_detail : '',
     tongueSize: labelFromEnum(record.tongue_size, TONGUE_SIZE_FROM_API, DEFAULT_STATE.tongueSize),
     tonguePosition: labelFromEnum(record.tongue_position, TONGUE_POSITION_FROM_API, DEFAULT_STATE.tonguePosition),
     amountOfSaliva: labelFromEnum(record.saliva_amount, SALIVA_AMOUNT_FROM_API, DEFAULT_STATE.amountOfSaliva),
@@ -171,7 +179,10 @@ const payloadFromState = (state: LocalResidualRidgeState): ResidualRidgeAssessme
   lower_arch_form: enumFromLabel(state.lowerArchForm, ARCH_FORM_TO_API),
   palatal_vault: enumFromLabel(state.palatalVault, PALATAL_VAULT_TO_API),
   palatal_throat_form: enumFromLabel(state.palatalThroatForm, PALATAL_THROAT_TO_API),
-  torus_palatinus: state.torusPresent,
+  torus_palatinus: {
+    selected: state.torusPresent,
+    size_mm: state.torusSizeMm || null,
+  },
   freenum_attachment: {
     upper: state.frenumU,
     lower: state.frenumL,
@@ -180,6 +191,7 @@ const payloadFromState = (state: LocalResidualRidgeState): ResidualRidgeAssessme
     selected: state.ridgeDeformity,
     exostosis_detail: state.exostosisDetail || null,
     bony_spicule_detail: state.bonySpiculeDetail || null,
+    flabby_tissue_detail: state.flabbyTissueDetail || null,
   },
   tongue_size: enumFromLabel(state.tongueSize, TONGUE_SIZE_TO_API),
   tongue_position: enumFromLabel(state.tonguePosition, TONGUE_POSITION_TO_API),
@@ -281,8 +293,8 @@ export default function ResidualRidgeAssessmentForm({ chartId }: ResidualRidgeAs
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-20 text-teal-600">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="flex justify-center items-center py-20">
+        <ToothLoaderIcon className="w-12 h-12" />
       </div>
     );
   }
@@ -456,6 +468,18 @@ export default function ResidualRidgeAssessmentForm({ chartId }: ResidualRidgeAs
                     <SelectCard key={opt} label={opt} type="checkbox" isSelected={formData.torusPresent.includes(opt)} onClick={() => toggleArrayField('torusPresent', opt)} />
                   ))}
                 </div>
+                {formData.torusPresent.length > 0 && (
+                  <div className="relative w-full animate-in fade-in slide-in-from-top-1">
+                    <Input
+                      type="number"
+                      value={formData.torusSizeMm}
+                      onChange={e => updateField('torusSizeMm', e.target.value)}
+                      className="pr-10 border-slate-200"
+                      placeholder="Size, e.g. 5"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-semibold">mm</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -487,7 +511,7 @@ export default function ResidualRidgeAssessmentForm({ chartId }: ResidualRidgeAs
             </div>
           </div>
 
-          {(formData.ridgeDeformity.includes('Exostosis') || formData.ridgeDeformity.includes('Bony spicule')) && (
+          {(formData.ridgeDeformity.includes('Exostosis') || formData.ridgeDeformity.includes('Bony spicule') || formData.ridgeDeformity.includes('Flabby tissue')) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
               {formData.ridgeDeformity.includes('Exostosis') && (
                 <div className="space-y-2">
@@ -508,6 +532,17 @@ export default function ResidualRidgeAssessmentForm({ chartId }: ResidualRidgeAs
                     onChange={e => updateField('bonySpiculeDetail', e.target.value)}
                     className="border-rose-200 focus-visible:ring-rose-500"
                     placeholder="Specify location..."
+                  />
+                </div>
+              )}
+              {formData.ridgeDeformity.includes('Flabby tissue') && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-rose-500 uppercase tracking-wider">Flabby Tissue Details</Label>
+                  <Input
+                    value={formData.flabbyTissueDetail}
+                    onChange={e => updateField('flabbyTissueDetail', e.target.value)}
+                    className="border-rose-200 focus-visible:ring-rose-500"
+                    placeholder="Specify location/extent..."
                   />
                 </div>
               )}
