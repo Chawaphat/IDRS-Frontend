@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Eye, EyeOff, FileImage, ScanLine, Sparkles, X, Images } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, FileImage, ScanLine, Sparkles, X, Images } from "lucide-react";
 import { imageManagementService, onChartImagesChanged } from "@/services/imageManagementService";
 import { aiDetectionResultService } from "@/services/aiDetectionResultService";
 import type { ImageManagement } from "@/services/patientService";
@@ -27,6 +27,10 @@ interface RenderRect {
  */
 export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
   const [loading, setLoading] = useState(true);
+  // Distinguishes "chart genuinely has no images" from "the fetch failed" —
+  // without this, a load error left `images` at [] with no visible sign
+  // anything had gone wrong, identical to the empty state.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [images, setImages] = useState<ImageManagement[]>([]);
   const [analysesById, setAnalysesById] = useState<Map<string, AIDetectResult>>(new Map());
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
@@ -41,6 +45,7 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setLoadFailed(false);
       try {
         const [imgs, analyses] = await Promise.all([
           imageManagementService.getByChart(chartId),
@@ -51,6 +56,7 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
         setAnalysesById(new Map(analyses.map((a) => [a.image_id, a.detection_data])));
       } catch (err) {
         console.error("Failed to load image references:", err);
+        if (!cancelled) setLoadFailed(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -118,6 +124,13 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
           ))}
         </div>
       </div>
+
+      {!loading && loadFailed && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-xl px-3.5 py-2.5">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          Couldn't load this chart's images — try switching tabs and back to retry.
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
