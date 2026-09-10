@@ -25,6 +25,10 @@ interface AISuggestionPanelProps {
  */
 export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISuggestionPanelProps) {
   const [loading, setLoading] = useState(true);
+  // A load failure used to be swallowed (console.error only), leaving the panel
+  // showing the "no X-ray uploaded" empty state — misleading, since the X-ray
+  // may well exist and only the fetch failed. Surface it instead.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [analysis, setAnalysis] = useState<AIDetectResult | null>(null);
   const [xrayImage, setXrayImage] = useState<ImageManagement | null>(null);
   const [xrayLoaded, setXrayLoaded] = useState(false);
@@ -35,6 +39,10 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
   const [cropFailed, setCropFailed] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  // Surfaces a detect-request failure inline — runDetection previously only
+  // console.error'd, leaving the button clickable again with no sign anything
+  // had gone wrong, indistinguishable from "never clicked".
+  const [detectError, setDetectError] = useState(false);
 
   const xrayImgRef = useRef<HTMLImageElement>(null);
   const cropCache = useRef<Map<number, string>>(new Map());
@@ -49,6 +57,7 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setLoadFailed(false);
       try {
         const [analyses, images] = await Promise.all([
           aiDetectionResultService.getByChart(chartId),
@@ -60,9 +69,11 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
         setAnalysis(latest?.detection_data ?? null);
         setXrayImage(images.find((img) => img.image_type === "panoramic_xray") ?? null);
       } catch (err) {
-        // Non-critical for the wizard — fail silently, just don't show a suggestion.
         console.error("Failed to load AI suggestion data:", err);
-        if (!cancelled) setAnalysis(null);
+        if (!cancelled) {
+          setAnalysis(null);
+          setLoadFailed(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -83,11 +94,13 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
   const runDetection = async () => {
     if (!chartId || !xrayImage) return;
     setDetecting(true);
+    setDetectError(false);
     try {
       const result = await aiDetectionResultService.detect(chartId, xrayImage.image_id);
       setAnalysis(result.detection_data);
     } catch (err) {
       console.error("Failed to run AI detection:", err);
+      setDetectError(true);
     } finally {
       setDetecting(false);
     }
@@ -145,6 +158,26 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
             <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />
           </div>
           <div className="h-4 w-2/3 rounded bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // The fetch failed — say so, rather than falling through to the "no X-ray
+  // uploaded" empty state, which would be misleading.
+  if (loadFailed) {
+    return (
+      <div className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">AI Suggestion</p>
+        </div>
+        <div className="min-h-[320px] rounded-2xl border border-amber-200 bg-amber-50 p-10 flex flex-col items-center justify-center text-center gap-3">
+          <AlertTriangle className="w-8 h-8 text-amber-500" />
+          <p className="text-base font-bold text-amber-800">Couldn't load the AI suggestion</p>
+          <p className="text-sm leading-relaxed text-amber-700 max-w-xs">
+            Charting still works — switch away from Dental Status and back to retry.
+          </p>
         </div>
       </div>
     );
@@ -215,6 +248,12 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
               </>
             )}
           </Button>
+          {detectError && (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+              AI detection failed. Please try again.
+            </div>
+          )}
         </div>
       </div>
     );

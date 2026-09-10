@@ -218,7 +218,10 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
       try {
         await imageManagementService.delete(chartId, existing.image_id);
         if (existing.image_file) {
-          await imageManagementService.deleteFromStorage(existing.image_type, existing.image_file);
+          const storageDeleted = await imageManagementService.deleteFromStorage(existing.image_type, existing.image_file);
+          if (!storageDeleted) {
+            showToast("Replaced the X-ray, but the old file couldn't be fully deleted from storage.", "error");
+          }
         }
       } catch (err) {
         console.error("Failed to remove existing panoramic X-ray:", err);
@@ -261,9 +264,12 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
         // 1. Delete metadata from backend
         await imageManagementService.delete(chartId, image.image_id);
 
-        // 2. Delete file from storage
+        // 2. Delete file from storage — the record above is already gone
+        // either way, so a failure here doesn't undo the delete; it just
+        // leaves an orphaned file, which we surface instead of hiding.
+        let storageDeleted = true;
         if (image.image_file) {
-          await imageManagementService.deleteFromStorage(image.image_type, image.image_file);
+          storageDeleted = await imageManagementService.deleteFromStorage(image.image_type, image.image_file);
         }
 
         // 3. Refresh gallery — also drops the now-cascade-deleted AI analysis, if any
@@ -274,7 +280,11 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
           return next;
         });
         await fetchImages();
-        showToast("Image deleted successfully.", "success");
+        if (storageDeleted) {
+          showToast("Image deleted successfully.", "success");
+        } else {
+          showToast("Image removed, but its file couldn't be fully deleted from storage.", "error");
+        }
       } catch (err) {
         console.error("Delete failed:", err);
         showToast("Failed to delete image.", "error");

@@ -118,12 +118,15 @@ export const imageManagementService = {
   },
 
   /**
-   * Delete a file from Supabase Storage bucket.
+   * Delete a file from Supabase Storage bucket. Never throws — a failure here
+   * shouldn't block the caller (the DB record is usually already gone by the
+   * time this runs) — but callers should check the returned flag and surface
+   * it, or the orphaned file goes unnoticed forever.
    */
   deleteFromStorage: async (
     category: ImageCategory,
     fileName: string,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const storagePath = `${category}/${fileName}`;
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
@@ -131,6 +134,8 @@ export const imageManagementService = {
 
     if (error) {
       console.error("Failed to delete from storage:", error.message);
+      return false;
     }
+    return true;
   },
 };

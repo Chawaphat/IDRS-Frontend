@@ -244,10 +244,11 @@ export default function PatientProfilePage() {
     if (!uploadFile || !uploadChartId) return;
     setUploading(true);
     try {
+      let oldStorageDeleted = true;
       if (existingPanoramicForUploadChart) {
         await imageManagementService.delete(uploadChartId, existingPanoramicForUploadChart.image_id);
         if (existingPanoramicForUploadChart.image_file) {
-          await imageManagementService.deleteFromStorage(existingPanoramicForUploadChart.image_type, existingPanoramicForUploadChart.image_file);
+          oldStorageDeleted = await imageManagementService.deleteFromStorage(existingPanoramicForUploadChart.image_type, existingPanoramicForUploadChart.image_file);
         }
       }
       const fileName = await imageManagementService.uploadToStorage(uploadFile, uploadCategory);
@@ -257,7 +258,11 @@ export default function PatientProfilePage() {
         description: uploadDescription.trim() || undefined,
       });
       await fetchImages(charts);
-      showToast('Image uploaded successfully!', 'success');
+      if (oldStorageDeleted) {
+        showToast('Image uploaded successfully!', 'success');
+      } else {
+        showToast("Uploaded, but the old X-ray's file couldn't be fully deleted from storage.", 'error');
+      }
       closeUploadModal();
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Failed to upload image. Please try again.';
