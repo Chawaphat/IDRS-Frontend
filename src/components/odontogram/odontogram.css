@@ -9,7 +9,7 @@
   --text: var(--odon-text, #1e2a3a);
   --line: var(--odon-line, #d7e0ec);
   --accent: var(--odon-accent, #0d9488);
-  --accent2: var(--odon-accent2, #12b981);
+  --accent2: var(--odon-accent2, #0d9488);
 }
 .odontogram-root{
   --bg: var(--odon-bg, #f3f6fb);
@@ -19,7 +19,7 @@
   --text: var(--odon-text, #1e2a3a);
   --line: var(--odon-line, #d7e0ec);
   --accent: var(--odon-accent, #0d9488);
-  --accent2: var(--odon-accent2, #12b981);
+  --accent2: var(--odon-accent2, #0d9488);
   color: var(--text);
   display: flex;
   flex-direction: column;

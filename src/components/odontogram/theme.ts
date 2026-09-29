@@ -36,7 +36,7 @@ export type OdontogramThemeConfig = {
     line?: string;
     /** Primary accent (buttons, active states). Default: `#3b7bff`. */
     accent?: string;
-    /** Secondary accent (success, selected states). Default: `#12b981`. */
+    /** Secondary accent (success, selected states). Default: `#0d9488`. */
     accent2?: string;
   };
 };

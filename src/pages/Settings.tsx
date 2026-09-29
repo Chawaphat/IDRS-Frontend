@@ -176,7 +176,7 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <div className="flex items-center gap-6">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-3xl font-bold text-white shadow-lg shadow-teal-500/20">
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg shadow-teal-500/20">
                       {fullName ? fullName.charAt(0).toUpperCase() : (user?.email?.charAt(0).toUpperCase() || 'D')}
                     </div>
                   </div>

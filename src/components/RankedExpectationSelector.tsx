@@ -69,7 +69,7 @@ export const RankedExpectationSelector: React.FC<RankedExpectationSelectorProps>
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-2">
-                        <div className="w-1 h-5 bg-[#0d9488] rounded-full"></div>
+                        <div className="w-1 h-5 bg-teal-500 rounded-full"></div>
                         <Label className="text-base font-bold text-slate-800">Tap in order of priority</Label>
                     </div>
                     {selectedExpectations.length > 0 && (
@@ -108,7 +108,7 @@ export const RankedExpectationSelector: React.FC<RankedExpectationSelectorProps>
                                 
                                 {/* Rank Badge */}
                                 {isSelected && (
-                                    <div className="absolute -top-3 -left-3 w-8 h-8 bg-[#0d9488] text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm ring-4 ring-white transition-transform animate-in zoom-in">
+                                    <div className="absolute -top-3 -left-3 w-8 h-8 bg-teal-500 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm ring-4 ring-white transition-transform animate-in zoom-in">
                                         {rankNumber}
                                     </div>
                                 )}
@@ -142,7 +142,7 @@ export const RankedExpectationSelector: React.FC<RankedExpectationSelectorProps>
             {selectedExpectations.length > 0 && (
                 <div className="bg-slate-50 rounded-3xl p-6 border border-slate-200 shadow-sm animate-in fade-in duration-500">
                     <div className="flex items-center gap-2 mb-5">
-                        <div className="w-1.5 h-5 bg-[#0d9488] rounded-full shadow-sm"></div>
+                        <div className="w-1.5 h-5 bg-teal-500 rounded-full shadow-sm"></div>
                         <Label className="text-sm font-bold text-slate-800 uppercase tracking-wider">Priority Ranking Result</Label>
                     </div>
                     <div className="space-y-3">
@@ -169,7 +169,7 @@ export const RankedExpectationSelector: React.FC<RankedExpectationSelectorProps>
                                         <div className={cn(
                                             "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow-sm transition-colors",
                                             isFirst
-                                                ? "bg-[#0d9488] text-white"
+                                                ? "bg-teal-500 text-white"
                                                 : "bg-slate-100 text-slate-600 group-hover:bg-[#f0fdfa] group-hover:text-[#0d9488]"
                                         )}>
                                             {rankNumber}

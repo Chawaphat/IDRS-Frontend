@@ -29,12 +29,12 @@ export const FacialSymmetry: React.FC<FacialSymmetryProps> = ({ value, onChange 
                                 className={cn(
                                     "relative p-4 rounded-xl border-[1.5px] cursor-pointer transition-all flex flex-col items-center justify-center gap-2 select-none",
                                     isSelected
-                                        ? "border-[#0d9488] bg-[#f0fdfa] shadow-sm"
-                                        : "border-gray-200 bg-white hover:border-[#0d9488]"
+                                        ? "border-teal-600 bg-teal-50 shadow-sm"
+                                        : "border-gray-200 bg-white hover:border-teal-600"
                                 )}
                             >
                                 {isSelected && (
-                                    <div className="absolute top-2 right-2 w-5 h-5 bg-[#0d9488] text-white rounded-full flex items-center justify-center">
+                                    <div className="absolute top-2 right-2 w-5 h-5 bg-teal-500 text-white rounded-full flex items-center justify-center">
                                         <Check className="w-3 h-3 stroke-[3]" />
                                     </div>
                                 )}

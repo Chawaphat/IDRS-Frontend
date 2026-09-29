@@ -19,7 +19,7 @@ import { FacialSymmetry } from "@/components/FacialSymmetry";
 import { FaceMuscleChart } from "@/components/FaceMuscleChart";
 import { SectionNotes } from "./components/SectionNotes";
 import { useSectionSave } from "@/hooks/useSectionSave";
-import { ToothLoaderIcon } from "@/components/ui/ToothLoader";
+import { ChartSectionSkeleton } from "./components/ChartSectionSkeleton";
 
 interface ExtraoralExamFormProps {
   chartId: string;
@@ -120,15 +120,7 @@ export default function ExtraoralExamForm({ chartId }: ExtraoralExamFormProps) {
   };
 
   if (loading) {
-    return (
-        <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center min-h-[60vh] rounded-3xl">
-            <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
-                <ToothLoaderIcon className="w-16 h-16 mb-4" />
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Section</h3>
-                <p className="text-slate-500 font-medium">Retrieving clinical data...</p>
-            </div>
-        </div>
-    );
+    return <ChartSectionSkeleton variant="wide" />;
   }
 
   return (

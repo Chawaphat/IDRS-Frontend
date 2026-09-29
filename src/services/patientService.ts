@@ -15,14 +15,16 @@ export interface BackendPatient {
 }
 
 export const patientService = {
-  getAll: async (): Promise<BackendPatient[]> => {
-    const response = await api.get<BackendPatient[]>('/patients');
+  getAll: async (skip = 0, limit = 100): Promise<BackendPatient[]> => {
+    const response = await api.get<BackendPatient[]>('/patients', {
+      params: { skip, limit },
+    });
     return response.data;
   },
 
-  search: async (query: string): Promise<BackendPatient[]> => {
+  search: async (query: string, skip = 0, limit = 100): Promise<BackendPatient[]> => {
     const response = await api.get<BackendPatient[]>('/patients/search', {
-      params: { query }
+      params: { query, skip, limit }
     });
     return response.data;
   },
@@ -60,8 +62,23 @@ export const patientService = {
     return response.data;
   },
 
-  getChartImages: async (chartId: string): Promise<ImageManagement[]> => {
-    const response = await api.get<ImageManagement[]>(`/dental-charts/${chartId}/images`);
+  getChartImages: async (
+    chartId: string,
+    refreshUrls = false,
+  ): Promise<ImageManagement[]> => {
+    const response = await api.get<ImageManagement[]>(`/dental-charts/${chartId}/images`, {
+      params: refreshUrls ? { refresh_urls: true } : undefined,
+    });
+    return response.data;
+  },
+
+  getPatientImages: async (
+    patientId: string,
+    refreshUrls = false,
+  ): Promise<ImageManagement[]> => {
+    const response = await api.get<ImageManagement[]>(`/patients/${patientId}/images`, {
+      params: refreshUrls ? { refresh_urls: true } : undefined,
+    });
     return response.data;
   },
 

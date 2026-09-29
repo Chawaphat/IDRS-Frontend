@@ -48,7 +48,7 @@ export function UnsavedChangesDialog({ open, sectionName, onSave, onDiscard, onC
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-xl"
+            className="w-full bg-teal-500 hover:bg-teal-600 text-white rounded-xl"
           >
             {saving ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>

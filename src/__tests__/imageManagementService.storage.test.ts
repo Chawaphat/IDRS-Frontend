@@ -75,26 +75,26 @@ describe("UTC-39: imageManagementService.uploadToStorage", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("UTC-40: imageManagementService.deleteFromStorage", () => {
   // UTC-40-TC-01
-  it("TC-01: removes the correct category-prefixed path and resolves without throwing", async () => {
+  it("TC-01: removes the correct category-prefixed path and resolves to true without throwing", async () => {
     mockRemove.mockResolvedValueOnce({ error: null });
 
     await expect(
       imageManagementService.deleteFromStorage("intraoral", "abc.jpg"),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(true);
 
     expect(mockRemove).toHaveBeenCalledWith(["intraoral/abc.jpg"]);
     expect(console.error).not.toHaveBeenCalled();
   });
 
   // UTC-40-TC-02
-  it("TC-02: logs the storage error and still resolves without throwing on a deletion error", async () => {
+  it("TC-02: logs the storage error and resolves to false (never throws) on a deletion error", async () => {
     mockRemove.mockResolvedValueOnce({
       error: { message: "Object not found" },
     });
 
     await expect(
       imageManagementService.deleteFromStorage("intraoral", "missing.jpg"),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
 
     expect(mockRemove).toHaveBeenCalledWith(["intraoral/missing.jpg"]);
     expect(console.error).toHaveBeenCalledWith(

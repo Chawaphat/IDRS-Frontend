@@ -164,7 +164,8 @@ export default function PatientEntryPage() {
             <UserPlus className="w-6 h-6 text-teal-600" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">New Patient Registration</h1>
+            <p className="clinical-eyebrow mb-1">Patient intake</p>
+            <h1 className="clinical-page-title text-3xl font-bold text-slate-900">New Patient Registration</h1>
             <p className="text-slate-500 mt-1">Enter the patient's details below to create a new medical record.</p>
           </div>
         </div>
@@ -176,6 +177,7 @@ export default function PatientEntryPage() {
           </div>
           
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            <div className="rounded-xl border border-teal-100 bg-teal-50/60 px-4 py-3 text-xs leading-relaxed text-teal-900"><span className="font-bold">Required:</span> Full name, age, and gender. Confirm these details with the patient before creating a new record.</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Full Name */}
               <div className="space-y-2 md:col-span-2">

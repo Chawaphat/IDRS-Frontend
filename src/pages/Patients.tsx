@@ -34,12 +34,17 @@ export interface Patient {
   created_at?: string;
 }
 
+const PAGE_SIZE = 24;
+
 export default function PatientsPage() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [defaultPatients, setDefaultPatients] = useState<Patient[]>([]);
+  const [activeSearch, setActiveSearch] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [quickFilter, setQuickFilter] = useState<'all' | 'recent' | 'alerts'>('all');
   const askConfirm = useConfirmStore((state) => state.ask);
   const showToast = useToastStore((state) => state.show);
   const location = useLocation();
@@ -74,11 +79,14 @@ export default function PatientsPage() {
 
   React.useEffect(() => {
     const fetchPatients = async () => {
+      setLoading(true);
       try {
-        const data = await patientService.getAll();
-        const mappedPatients = data.map(mapBackendPatientToPatient);
-        setDefaultPatients(mappedPatients);
-        setPatients(mappedPatients);
+        const skip = (page - 1) * PAGE_SIZE;
+        const data = activeSearch
+          ? await patientService.search(activeSearch, skip, PAGE_SIZE + 1)
+          : await patientService.getAll(skip, PAGE_SIZE + 1);
+        setHasNextPage(data.length > PAGE_SIZE);
+        setPatients(data.slice(0, PAGE_SIZE).map(mapBackendPatientToPatient));
       } catch (error) {
         console.error("Failed to fetch patients:", error);
       } finally {
@@ -86,7 +94,7 @@ export default function PatientsPage() {
       }
     };
     fetchPatients();
-  }, []);
+  }, [activeSearch, page]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,19 +105,8 @@ export default function PatientsPage() {
       return;
     }
 
-    setLoading(true);
-    try {
-      // SRS-05: Query backend database for matching patients
-      const data = await patientService.search(searchTerm.trim());
-      const mappedPatients = data.map(mapBackendPatientToPatient);
-      setPatients(mappedPatients);
-    } catch (error) {
-      console.error("Failed to search patients:", error);
-      // SRS-06: Database connection error toast
-      showToast("Database connection error. Cannot perform search at this time.", "error");
-    } finally {
-      setLoading(false);
-    }
+    setPage(1);
+    setActiveSearch(searchTerm.trim());
   };
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,17 +115,22 @@ export default function PatientsPage() {
 
     // SRS-02: Clear search resets view to default list of all patients
     if (!value.trim()) {
-      setPatients(defaultPatients);
+      setPage(1);
+      setActiveSearch('');
     }
   };
 
-  const totalPatients = defaultPatients.length;
+  const visiblePatients = patients.filter(patient => {
+    if (quickFilter === 'alerts') return Boolean(patient.clinicalSummary?.medicalAlerts?.length);
+    if (quickFilter === 'recent') return patient.lastVisit !== 'N/A' && (Date.now() - new Date(patient.lastVisit).getTime()) < 30 * 24 * 60 * 60 * 1000;
+    return true;
+  });
   
   // Calculate real statistics based on data
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
-  const recentVisitsThisMonth = defaultPatients.filter(p => {
+  const recentVisitsThisMonth = patients.filter(p => {
     if (!p.lastVisit || p.lastVisit === 'N/A') return false;
     const lastVisitDate = new Date(p.lastVisit);
     return lastVisitDate.getMonth() === currentMonth && lastVisitDate.getFullYear() === currentYear;
@@ -139,25 +141,26 @@ export default function PatientsPage() {
         {/* Header & Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Patient Directory</h2>
-            <p className="text-slate-500 mt-1">Manage your clinic's patient records and medical history.</p>
+            <p className="clinical-eyebrow mb-2">Clinical workspace</p>
+            <h2 className="clinical-page-title text-3xl font-bold text-slate-900">Patient Directory</h2>
+            <p className="text-slate-500 mt-1">Find records quickly and keep each patient's clinical context in one place.</p>
           </div>
         </div>
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center gap-5 hover:border-teal-200 transition-colors">
+          <div className="clinical-card rounded-3xl p-6 flex items-center gap-5 hover:border-teal-200 transition-colors">
             <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center shrink-0">
               <Users className="w-7 h-7 text-teal-600" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold text-slate-500 mb-0.5">Total Patients</p>
-              <h3 className="text-3xl font-bold text-slate-900">{totalPatients}</h3>
-              <p className="text-[11px] font-medium text-slate-400 mt-1">All registered records</p>
+              <h3 className="text-3xl font-bold text-slate-900">{patients.length}</h3>
+              <p className="text-[11px] font-medium text-slate-400 mt-1">Records on this page</p>
             </div>
           </div>
           
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center gap-5 hover:border-indigo-200 transition-colors">
+          <div className="clinical-card rounded-3xl p-6 flex items-center gap-5 hover:border-indigo-200 transition-colors">
             <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0">
               <Activity className="w-7 h-7 text-indigo-600" />
             </div>
@@ -170,7 +173,7 @@ export default function PatientsPage() {
 
           <button 
             onClick={() => navigate('/patient-entry')}
-            className="group bg-teal-500 hover:bg-teal-600 rounded-3xl p-6 border border-transparent shadow-sm flex items-center justify-between transition-all active:scale-[0.98]"
+            className="group bg-teal-500 hover:bg-teal-600 rounded-3xl p-6 border border-transparent shadow-sm shadow-teal-500/10 flex items-center justify-between transition-all active:scale-[0.98]"
           >
             <div className="flex items-center gap-5">
               <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0 group-hover:scale-110 transition-transform">
@@ -189,7 +192,7 @@ export default function PatientsPage() {
         </div>
 
         {/* Patient Data Grid Area */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1 min-h-[500px]">
+        <div className="clinical-card rounded-3xl overflow-hidden flex flex-col flex-1 min-h-[500px]">
           
           {/* Table Toolbar */}
           <form onSubmit={handleSearch} className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -213,6 +216,16 @@ export default function PatientsPage() {
               </button>
             </div>
           </form>
+
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-white px-5 py-3">
+            <span className="mr-1 text-xs font-bold uppercase tracking-wider text-slate-400">Quick filters</span>
+            {([
+              ['all', 'All records'],
+              ['recent', 'Visit in 30 days'],
+              ['alerts', 'Medical alert'],
+            ] as const).map(([id, label]) => <button key={id} type="button" onClick={() => setQuickFilter(id)} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${quickFilter === id ? 'bg-teal-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>)}
+            <span className="ml-auto text-xs font-medium text-slate-400">{visiblePatients.length} shown on page {page}</span>
+          </div>
 
           {/* Scrollable Card Grid Area */}
           <div className="overflow-y-auto w-full flex-1 p-6 bg-slate-50/50">
@@ -251,7 +264,7 @@ export default function PatientsPage() {
                   </div>
                 ))}
               </div>
-            ) : patients.length === 0 ? (
+            ) : visiblePatients.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-slate-400 space-y-4 py-20">
                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
                   <UserPlus className="w-10 h-10 text-slate-300" />
@@ -263,7 +276,7 @@ export default function PatientsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {patients.map((patient: Patient) => (
+                {visiblePatients.map((patient: Patient) => (
                   <div 
                     key={patient.id} 
                     className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col overflow-hidden cursor-pointer hover:border-teal-200"
@@ -272,7 +285,7 @@ export default function PatientsPage() {
                     {/* Card Header */}
                     <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/30">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
                           {patient.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -298,7 +311,6 @@ export default function PatientsPage() {
                           onConfirm: () => {
                             patientService.delete(patient.id).then(() => {
                               setPatients(prev => prev.filter(p => p.id !== patient.id));
-                              setDefaultPatients(prev => prev.filter(p => p.id !== patient.id));
                               showToast('Patient deleted successfully', 'success');
                             }).catch(err => {
                               console.error('Failed to delete patient:', err);
@@ -365,6 +377,25 @@ export default function PatientsPage() {
                 ))}
               </div>
             )}
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-100 bg-white px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setPage((current) => current - 1)}
+              disabled={page === 1 || loading}
+              className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-xs font-medium text-slate-500">Page {page}</span>
+            <button
+              type="button"
+              onClick={() => setPage((current) => current + 1)}
+              disabled={!hasNextPage || loading}
+              className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
           </div>
       </div>
     </div>

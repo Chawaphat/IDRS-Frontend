@@ -11,7 +11,7 @@ import {
   type ResidualRidgeAssessmentPayload,
 } from '@/services/residualRidgeAssessmentService';
 import { useSectionSave } from '@/hooks/useSectionSave';
-import { ToothLoaderIcon } from '@/components/ui/ToothLoader';
+import { ChartSectionSkeleton } from './components/ChartSectionSkeleton';
 import { SectionNotes } from './components/SectionNotes';
 
 interface ResidualRidgeAssessmentFormProps {
@@ -292,11 +292,7 @@ export default function ResidualRidgeAssessmentForm({ chartId }: ResidualRidgeAs
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center py-20">
-        <ToothLoaderIcon className="w-12 h-12" />
-      </div>
-    );
+    return <ChartSectionSkeleton variant="wide" />;
   }
 
   return (

@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileImage, Loader2, Sparkles, UploadCloud, X, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { aiDetectionResultService } from "@/services/aiDetectionResultService";
+import {
+  aiDetectionResultService,
+  onChartAiAnalysesChanged,
+} from "@/services/aiDetectionResultService";
 import { imageManagementService, onChartImagesChanged } from "@/services/imageManagementService";
 import type { ImageManagement } from "@/services/patientService";
 import { diseaseColor, cropToothImage, type AIDetectResult, type AITooth } from "@/lib/aiDetection";
@@ -82,10 +85,15 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
     // Dental Status stays mounted (hidden, not unmounted) once visited, so a
     // plain chartId-keyed effect won't notice an X-ray uploaded afterwards
     // from the Image Gallery tab. Re-fetch whenever this chart's images change.
-    const unsubscribe = onChartImagesChanged(chartId, load);
+    const unsubscribeImages = onChartImagesChanged(chartId, load);
+    const unsubscribeAnalyses = onChartAiAnalysesChanged(chartId, (analysis) => {
+      setAnalysis(analysis.detection_data);
+      setLoadFailed(false);
+    });
     return () => {
       cancelled = true;
-      unsubscribe();
+      unsubscribeImages();
+      unsubscribeAnalyses();
     };
   }, [chartId]);
 
@@ -299,7 +307,7 @@ export function AISuggestionPanel({ chartId, toothNo, onGoToImageGallery }: AISu
             type="button"
             onClick={() => cropUrl && setZoomed(true)}
             disabled={!cropUrl}
-            className="group relative block w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-950 border border-slate-200 mb-3 cursor-zoom-in disabled:cursor-default"
+            className="group relative block w-full aspect-[4/3] rounded-xl overflow-hidden bg-white border border-slate-200 mb-3 cursor-zoom-in disabled:cursor-default"
           >
             {cropUrl ? (
               <>

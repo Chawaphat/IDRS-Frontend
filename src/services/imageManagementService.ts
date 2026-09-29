@@ -19,6 +19,7 @@ export interface ImageManagementUpdate {
 }
 
 const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET || "Image";
+const imageRequests = new Map<string, Promise<ImageManagement[]>>();
 
 // Other tabs (e.g. the Dental Status odontogram) mount once and stay alive via
 // CSS visibility rather than remounting, so a plain useEffect keyed on chartId
@@ -27,6 +28,7 @@ const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET || "Image";
 const IMAGES_CHANGED_EVENT = "idrs:chart-images-changed";
 
 function notifyImagesChanged(chartId: string) {
+  imageRequests.delete(chartId);
   window.dispatchEvent(new CustomEvent(IMAGES_CHANGED_EVENT, { detail: { chartId } }));
 }
 
@@ -43,11 +45,22 @@ export const imageManagementService = {
   /**
    * Get all images for a chart (returns signed URLs from backend)
    */
-  getByChart: async (chartId: string): Promise<ImageManagement[]> => {
-    const response = await api.get<ImageManagement[]>(
-      `/dental-charts/${chartId}/images`,
-    );
-    return response.data;
+  getByChart: (chartId: string, refreshUrls = false): Promise<ImageManagement[]> => {
+    if (refreshUrls) imageRequests.delete(chartId);
+    const cached = imageRequests.get(chartId);
+    if (cached) return cached;
+
+    const request = api
+      .get<ImageManagement[]>(`/dental-charts/${chartId}/images`, {
+        params: refreshUrls ? { refresh_urls: true } : undefined,
+      })
+      .then((response) => response.data)
+      .catch((error) => {
+        imageRequests.delete(chartId);
+        throw error;
+      });
+    imageRequests.set(chartId, request);
+    return request;
   },
 
   /**

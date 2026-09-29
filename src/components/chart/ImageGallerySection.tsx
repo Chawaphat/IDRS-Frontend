@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import {
   Camera,
   Upload,
@@ -24,11 +24,13 @@ import { useToastStore } from "@/store/toastStore";
 import { imageManagementService } from "@/services/imageManagementService";
 import type { ImageCategory } from "@/services/imageManagementService";
 import type { ImageManagement } from "@/services/patientService";
-import { aiDetectionResultService } from "@/services/aiDetectionResultService";
-import { AIDetectionViewer } from "@/components/ai/AIDetectionViewer";
+import {
+  aiDetectionResultService,
+  onChartAiAnalysesChanged,
+} from "@/services/aiDetectionResultService";
 import type { AIDetectResult } from "@/lib/aiDetection";
 import { format, parseISO } from "date-fns";
-import { ToothLoaderIcon } from "@/components/ui/ToothLoader";
+import { ChartSectionSkeleton } from "./components/ChartSectionSkeleton";
 
 interface ImageGallerySectionProps {
   chartId: string;
@@ -42,6 +44,7 @@ const CATEGORIES: { id: ImageCategory; label: string; icon: React.ReactNode }[] 
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const AIDetectionViewer = lazy(() => import("@/components/ai/AIDetectionViewer").then((module) => ({ default: module.AIDetectionViewer })));
 
 export default function ImageGallerySection({ chartId }: ImageGallerySectionProps) {
   const { show: showToast } = useToastStore();
@@ -98,6 +101,13 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
       setLoading(false);
     };
     load();
+    const unsubscribe = onChartAiAnalysesChanged(chartId, (analysis) => {
+      setAnalysesById((previous) => new Map(previous).set(
+        analysis.image_id,
+        analysis.detection_data,
+      ));
+    });
+    return unsubscribe;
   }, [fetchImages, fetchAnalyses]);
 
   // Filtered images for active category
@@ -319,15 +329,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
 
   // Loading state
   if (loading) {
-    return (
-      <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center min-h-[60vh] rounded-3xl">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border border-teal-100 flex flex-col items-center animate-in zoom-in-95 duration-300">
-          <ToothLoaderIcon className="w-16 h-16 mb-4" />
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Loading Images</h3>
-          <p className="text-slate-500 font-medium">Retrieving image gallery...</p>
-        </div>
-      </div>
-    );
+    return <ChartSectionSkeleton variant="gallery" />;
   }
 
   const activeCategoryLabel = CATEGORIES.find((c) => c.id === activeCategory)?.label ?? "";
@@ -477,7 +479,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
           {isPanoramicTab ? (
             panoramicImage ? (
               <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div className="relative bg-slate-950 flex items-center justify-center">
+                <div className="relative bg-white flex items-center justify-center">
                   {/* object-contain, not cover — an X-ray must never be edge-cropped */}
                   <img
                     src={panoramicImage.image_url}
@@ -559,10 +561,12 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
                 {/* Inline AI results — same viewer used by the standalone AI Analysis tab */}
                 {showAIResults && analysesById.has(panoramicImage.image_id) && (
                   <div className="border-t border-slate-100 p-4 sm:p-6 bg-slate-50/50">
-                    <AIDetectionViewer
-                      imageUrl={panoramicImage.image_url!}
-                      result={analysesById.get(panoramicImage.image_id)!}
-                    />
+                    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-slate-100" />}>
+                      <AIDetectionViewer
+                        imageUrl={panoramicImage.image_url!}
+                        result={analysesById.get(panoramicImage.image_id)!}
+                      />
+                    </Suspense>
                   </div>
                 )}
               </div>
@@ -592,7 +596,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
                   className="group relative bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:shadow-md hover:border-slate-300"
                 >
                   {/* Image Container — object-contain on a neutral bg so nothing is ever cropped out of view */}
-                  <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
+                  <div className="relative aspect-[4/3] bg-white overflow-hidden">
                     <img
                       src={image.image_url}
                       alt={image.description || "Clinical image"}
@@ -635,8 +639,12 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
 
                   {/* Image Info */}
                   <div className="p-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">{CATEGORIES.find(category => category.id === image.image_type)?.label ?? 'Clinical image'}</span>
+                      {analyzedImageIds.has(image.image_id) && <span className="flex items-center gap-1 text-[10px] font-bold text-teal-700"><Sparkles className="h-3 w-3" /> AI analyzed</span>}
+                    </div>
                     {image.description && <p className="text-sm font-medium text-slate-700 truncate">{image.description}</p>}
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 mt-1">
                       {image.uploaded_at ? format(parseISO(image.uploaded_at), "MMM d, yyyy • h:mm a") : ""}
                     </p>
                   </div>
@@ -724,7 +732,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Current</p>
-                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-950">
+                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-white">
                   {panoramicImage?.image_url && (
                     <img src={panoramicImage.image_url} alt="Current panoramic X-ray" className="w-full h-full object-contain opacity-60" />
                   )}
@@ -732,7 +740,7 @@ export default function ImageGallerySection({ chartId }: ImageGallerySectionProp
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wide text-teal-600 mb-1.5">New</p>
-                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-950 ring-2 ring-teal-400">
+                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-white ring-2 ring-teal-400">
                   {previewUrl && <img src={previewUrl} alt="New panoramic X-ray" className="w-full h-full object-contain" />}
                 </div>
               </div>

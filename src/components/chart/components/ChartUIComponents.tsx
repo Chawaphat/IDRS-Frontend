@@ -42,7 +42,7 @@ export const MedicalIcon = ({ type, className }: { type: string; className?: str
             case 'mid-ul-left':
                 return <svg viewBox="0 0 100 40" className="w-16 h-8"><rect x="15" y="5" width="70" height="15" rx="2" fill="#fff" stroke="#94a3b8" /><rect x="25" y="20" width="50" height="15" rx="2" fill="#fff" stroke="#94a3b8" /><line x1="44" y1="2" x2="44" y2="20" stroke="#ef4444" strokeWidth="1.5" /><line x1="50" y1="20" x2="50" y2="38" stroke="#3b82f6" strokeWidth="1.5" /></svg>;
             case 'mid-ul-straight':
-                return <svg viewBox="0 0 100 40" className="w-16 h-8"><rect x="15" y="5" width="70" height="15" rx="2" fill="#fff" stroke="#94a3b8" /><rect x="25" y="20" width="50" height="15" rx="2" fill="#fff" stroke="#94a3b8" /><line x1="50" y1="2" x2="50" y2="38" stroke="#10b981" strokeWidth="1.5" /></svg>;
+                return <svg viewBox="0 0 100 40" className="w-16 h-8"><rect x="15" y="5" width="70" height="15" rx="2" fill="#fff" stroke="#94a3b8" /><rect x="25" y="20" width="50" height="15" rx="2" fill="#fff" stroke="#94a3b8" /><line x1="50" y1="2" x2="50" y2="38" stroke="#0d9488" strokeWidth="1.5" /></svg>;
             case 'buccal-normal':
                 return <svg viewBox="0 0 100 40" className="w-16 h-8"><path d="M5 20 Q50 45 95 20 Q50 5 5 20" fill="#1e293b" /><path d="M12 20 Q50 38 88 20 Q50 10 12 20" fill="#fff" stroke="#94a3b8" strokeWidth="1" /></svg>;
             case 'buccal-increased':

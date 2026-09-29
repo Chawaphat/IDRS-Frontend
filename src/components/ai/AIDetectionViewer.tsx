@@ -157,7 +157,7 @@ export function AIDetectionViewer({ imageUrl, result }: AIDetectionViewerProps) 
             </div>
           </div>
 
-          <div ref={imageContainerRef} className="relative rounded-2xl overflow-hidden bg-slate-950 flex-1 min-h-0">
+          <div ref={imageContainerRef} className="relative rounded-2xl overflow-hidden bg-white flex-1 min-h-0">
             <img
               ref={imgRef}
               src={imageUrl}
@@ -344,7 +344,7 @@ export function AIDetectionViewer({ imageUrl, result }: AIDetectionViewerProps) 
               type="button"
               onClick={() => cropUrl && setZoomedCropUrl(cropUrl)}
               disabled={!cropUrl}
-              className="group relative flex-shrink-0 w-[280px] max-w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-950 shadow-md cursor-zoom-in disabled:cursor-default"
+              className="group relative flex-shrink-0 w-[280px] max-w-full aspect-[4/3] rounded-2xl overflow-hidden bg-white shadow-md cursor-zoom-in disabled:cursor-default"
             >
               {cropUrl ? (
                 <>

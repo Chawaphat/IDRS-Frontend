@@ -9,7 +9,7 @@ import { dentalChartService } from '@/services/dentalChartService';
 import type { DentalChart } from '@/services/types/dentalChart';
 import { imageManagementService } from '@/services/imageManagementService';
 import type { ImageCategory } from '@/services/imageManagementService';
-import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, Stethoscope, PanelLeftClose, PanelLeft, X, Trash2, AlertTriangle, ScanLine, FileImage, FolderOpen, Upload, ImagePlus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, Calendar, Clock, ChevronRight, LayoutDashboard, ImageIcon, ImageOff, Stethoscope, PanelLeftClose, PanelLeft, X, Trash2, AlertTriangle, ScanLine, FileImage, FolderOpen, Upload, ImagePlus, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toastStore';
 import type { Patient } from './Patients';
 import { useAuthStore } from '@/store/authStore';
@@ -64,6 +64,9 @@ export default function PatientProfilePage() {
   const [imageFilter, setImageFilter] = useState<ImageFilter>('all');
   const [overviewImageTab, setOverviewImageTab] = useState<ImageFilter>('all');
   const [zoomImage, setZoomImage] = useState<ImageManagement | null>(null);
+  const [failedOverviewImageIds, setFailedOverviewImageIds] = useState<Set<string>>(() => new Set());
+  const [overviewImageRetries, setOverviewImageRetries] = useState<Map<string, number>>(() => new Map());
+  const retriedOverviewImageIds = useRef<Set<string>>(new Set());
 
   // Upload-from-Directory state — images are chart-scoped on the backend, so
   // uploading here also requires picking which visit (chart) it belongs to.
@@ -174,26 +177,34 @@ export default function PatientProfilePage() {
   };
 
 
-  const fetchImages = async (chartsList: DentalChart[]) => {
+  const fetchImages = async (refreshUrls = false) => {
+    if (!id) return;
     try {
       setLoadingImages(true);
-      let failedCount = 0;
-      const imagesPromises = chartsList.map(chart =>
-        patientService.getChartImages(chart.chart_id).catch((err) => {
-          console.error(`Failed to load images for chart ${chart.chart_id}`, err);
-          failedCount += 1;
-          return [] as ImageManagement[];
-        })
-      );
-      const results = await Promise.all(imagesPromises);
-      setImages(results.flat());
-      setImagesLoadFailedCount(failedCount);
+      const patientImages = await patientService.getPatientImages(id, refreshUrls);
+      setImages(patientImages);
+      setImagesLoadFailedCount(0);
     } catch (err) {
       console.error("Failed to load images", err);
-      setImagesLoadFailedCount(chartsList.length);
+      setImagesLoadFailedCount(1);
     } finally {
       setLoadingImages(false);
     }
+  };
+
+  const handleOverviewImageError = (imageId: string) => {
+    if (!retriedOverviewImageIds.current.has(imageId)) {
+      retriedOverviewImageIds.current.add(imageId);
+      setOverviewImageRetries((previous) => {
+        const next = new Map(previous);
+        next.set(imageId, (next.get(imageId) ?? 0) + 1);
+        return next;
+      });
+      void fetchImages(true);
+      return;
+    }
+
+    setFailedOverviewImageIds((previous) => new Set(previous).add(imageId));
   };
 
   // ---------- Upload from Patient Directory ----------
@@ -257,7 +268,7 @@ export default function PatientProfilePage() {
         image_file: fileName,
         description: uploadDescription.trim() || undefined,
       });
-      await fetchImages(charts);
+      await fetchImages();
       if (oldStorageDeleted) {
         showToast('Image uploaded successfully!', 'success');
       } else {
@@ -299,7 +310,7 @@ export default function PatientProfilePage() {
       const chartsRes = await dentalChartService.getByPatient(id);
       setCharts(chartsRes);
       if (chartsRes.length > 0) {
-        await fetchImages(chartsRes);
+        await fetchImages();
       } else {
         setImages([]);
       }
@@ -370,7 +381,7 @@ export default function PatientProfilePage() {
       setCharts(cList);
       setLoading(false);
       if (cList.length > 0) {
-        fetchImages(cList);
+        fetchImages();
       }
       return;
     }
@@ -407,7 +418,7 @@ export default function PatientProfilePage() {
         }
         setCharts(chartsRes);
         if (chartsRes.length > 0) {
-          await fetchImages(chartsRes);
+          await fetchImages();
         }
       } catch (err: any) {
         console.error("Failed to fetch patient data", err);
@@ -685,8 +696,10 @@ export default function PatientProfilePage() {
             <div className="flex-1 flex flex-col gap-6 min-h-0">
                 
                 {/* Patient Summary Panel */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row gap-6 items-start md:items-center justify-between shrink-0">
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col gap-4 shrink-0">
+                  <div className="flex flex-col md:flex-row gap-5 items-start md:items-center justify-between">
                     <div className="flex flex-col">
+                        <p className="clinical-eyebrow mb-1">Patient clinical summary</p>
                         <h2 className="text-xl font-bold text-slate-900 mb-1">{patient.name}</h2>
                         <div className="flex items-center gap-3 text-sm text-slate-500">
                             <span className="font-mono text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded">{patient.hn}</span>
@@ -709,6 +722,13 @@ export default function PatientProfilePage() {
                           Edit Profile
                         </button>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-t border-slate-100 pt-4">
+                    <div className="rounded-xl bg-slate-50 px-3 py-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Visits</p><p className="mt-0.5 text-lg font-bold text-slate-800">{charts.length}</p></div>
+                    <div className="rounded-xl bg-slate-50 px-3 py-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinical images</p><p className="mt-0.5 text-lg font-bold text-slate-800">{images.length}</p></div>
+                    <div className="rounded-xl bg-slate-50 px-3 py-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Latest visit</p><p className="mt-0.5 truncate text-sm font-bold text-slate-800">{charts.length ? new Date(sortedCharts[0].created_at).toLocaleDateString() : '—'}</p></div>
+                    <div className={`rounded-xl px-3 py-2 ${patient.clinicalSummary?.medicalAlerts?.length ? 'bg-rose-50' : 'bg-emerald-50'}`}><p className={`text-[10px] font-bold uppercase tracking-wider ${patient.clinicalSummary?.medicalAlerts?.length ? 'text-rose-500' : 'text-emerald-600'}`}>Medical alerts</p><p className={`mt-0.5 text-sm font-bold ${patient.clinicalSummary?.medicalAlerts?.length ? 'text-rose-800' : 'text-emerald-800'}`}>{patient.clinicalSummary?.medicalAlerts?.length ? 'Review required' : 'None recorded'}</p></div>
+                  </div>
                 </div>
 
                 {/* Overview Section */}
@@ -896,14 +916,23 @@ export default function PatientProfilePage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => setZoomImage(panoramic)}
-                                                            className="group relative aspect-[2/1] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                                                            className="group relative aspect-[2/1] w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                                                         >
-                                                            <img
+                                                            {failedOverviewImageIds.has(panoramic.image_id) ? (
+                                                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-slate-400">
+                                                                <ImageOff className="h-6 w-6" />
+                                                                <span className="text-xs font-semibold">Image unavailable</span>
+                                                              </div>
+                                                            ) : (
+                                                              <img
+                                                                key={`${panoramic.image_id}-${overviewImageRetries.get(panoramic.image_id) ?? 0}`}
                                                                 src={panoramic.image_url}
                                                                 alt={panoramic.description || "Panoramic X-ray"}
                                                                 className="h-full w-full object-contain transition-transform group-hover:scale-[1.03]"
                                                                 loading="lazy"
-                                                            />
+                                                                onError={() => handleOverviewImageError(panoramic.image_id)}
+                                                              />
+                                                            )}
                                                         </button>
                                                     )}
                                                 </div>
@@ -926,14 +955,23 @@ export default function PatientProfilePage() {
                                                                     key={img.image_id}
                                                                     type="button"
                                                                     onClick={() => setZoomImage(img)}
-                                                                    className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-950 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                                                                    className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                                                                 >
-                                                                    <img
+                                                                    {failedOverviewImageIds.has(img.image_id) ? (
+                                                                      <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center text-slate-400">
+                                                                        <ImageOff className="h-4 w-4" />
+                                                                        <span className="text-[10px] font-semibold">Unavailable</span>
+                                                                      </div>
+                                                                    ) : (
+                                                                      <img
+                                                                        key={`${img.image_id}-${overviewImageRetries.get(img.image_id) ?? 0}`}
                                                                         src={img.image_url}
                                                                         alt={img.description || "Intraoral photo"}
                                                                         className="h-full w-full object-contain transition-transform group-hover:scale-[1.05]"
                                                                         loading="lazy"
-                                                                    />
+                                                                        onError={() => handleOverviewImageError(img.image_id)}
+                                                                      />
+                                                                    )}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -988,20 +1026,20 @@ export default function PatientProfilePage() {
                                         <div key={chart.chart_id} className="relative group">
                                             {/* Timeline Line Connector */}
                                             {index < sortedCharts.length - 1 && (
-                                                <div className="absolute -left-[33px] top-12 -bottom-11 w-[2px] bg-slate-100 group-hover:bg-[#1D9E75]/30 transition-colors" />
+                                                <div className="absolute -left-[33px] top-12 -bottom-11 w-[2px] bg-slate-100 group-hover:bg-teal-500/30 transition-colors" />
                                             )}
 
                                             {/* Timeline Dot Indicator */}
                                             {index === 0 ? (
-                                                <div className="absolute top-6 -left-[49px] w-8 h-8 rounded-full bg-[#f0faf6] border-2 border-[#1D9E75] flex items-center justify-center shadow-md transition-all group-hover:scale-110 z-10">
+                                                <div className="absolute top-6 -left-[49px] w-8 h-8 rounded-full bg-teal-50 border-2 border-teal-600 flex items-center justify-center shadow-md transition-all group-hover:scale-110 z-10">
                                                     <span className="relative flex h-3 w-3">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1D9E75] opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-[#1D9E75]"></span>
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-500 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-500"></span>
                                                     </span>
                                                 </div>
                                             ) : (
-                                                <div className="absolute top-6 -left-[49px] w-8 h-8 rounded-full bg-white border-2 border-slate-200 group-hover:border-[#1D9E75] flex items-center justify-center shadow-sm transition-all group-hover:scale-110 z-10">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300 group-hover:bg-[#1D9E75] transition-colors" />
+                                                <div className="absolute top-6 -left-[49px] w-8 h-8 rounded-full bg-white border-2 border-slate-200 group-hover:border-teal-600 flex items-center justify-center shadow-sm transition-all group-hover:scale-110 z-10">
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300 group-hover:bg-teal-600 transition-colors" />
                                                 </div>
                                             )}
 
@@ -1012,14 +1050,14 @@ export default function PatientProfilePage() {
                                             >
                                                 <div className="space-y-2.5 flex-1 w-full">
                                                     <div className="flex flex-wrap items-center gap-3">
-                                                        <h4 className="font-bold text-slate-800 text-base group-hover:text-[#1D9E75] transition-colors">
+                                                        <h4 className="font-bold text-slate-800 text-base group-hover:text-teal-700 transition-colors">
                                                             Clinical Visit
                                                         </h4>
-                                                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-[#f0faf6] text-[#1D9E75] border border-[#1D9E75]/20">
+                                                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-teal-50 text-teal-700 border border-teal-600/20">
                                                             Completed
                                                         </span>
                                                         {index === 0 && (
-                                                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-[#f0faf6] text-[#1D9E75] border border-[#1D9E75]/20 shadow-sm shadow-[#1D9E75]/5 animate-pulse">
+                                                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-teal-50 text-teal-700 border border-teal-600/20 shadow-sm shadow-teal-600/5 animate-pulse">
                                                                 Latest Visit
                                                             </span>
                                                         )}
@@ -1057,7 +1095,7 @@ export default function PatientProfilePage() {
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
-                                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100/80 text-slate-400 group-hover:bg-[#f0faf6] group-hover:text-[#1D9E75] transition-all duration-300">
+                                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100/80 text-slate-400 group-hover:bg-teal-50 group-hover:text-teal-700 transition-all duration-300">
                                                         <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                                                     </div>
                                                 </div>
@@ -1175,7 +1213,7 @@ export default function PatientProfilePage() {
                                                     type="button"
                                                     onClick={() => setZoomImage(img)}
                                                     className={cn(
-                                                        "group relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-200 text-left transition-all hover:shadow-md hover:-translate-y-0.5",
+                                                        "group relative rounded-2xl overflow-hidden bg-white border border-slate-200 text-left transition-all hover:shadow-md hover:-translate-y-0.5",
                                                         count === 1 && "row-span-2",
                                                         count === 2 && "row-span-2",
                                                         count >= 3 && isPanoramic && "col-span-2 row-span-2"
@@ -1343,7 +1381,7 @@ export default function PatientProfilePage() {
                                 />
                                 {uploadPreviewUrl ? (
                                     <div className="flex items-center gap-3">
-                                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0">
+                                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-white flex-shrink-0">
                                             <img src={uploadPreviewUrl} alt="Selected file" className="w-full h-full object-contain" />
                                         </div>
                                         <div className="text-left min-w-0">

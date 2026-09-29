@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { AlertTriangle, Eye, EyeOff, FileImage, ScanLine, Sparkles, X, Images } from "lucide-react";
 import { imageManagementService, onChartImagesChanged } from "@/services/imageManagementService";
-import { aiDetectionResultService } from "@/services/aiDetectionResultService";
+import {
+  aiDetectionResultService,
+  onChartAiAnalysesChanged,
+} from "@/services/aiDetectionResultService";
 import type { ImageManagement } from "@/services/patientService";
 import { diseaseColor, type AIDetectResult } from "@/lib/aiDetection";
 
@@ -65,10 +68,17 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
     // The Dental Status tab stays mounted (hidden, not unmounted) once visited, so a
     // plain chartId-keyed effect won't pick up uploads/deletes made from Image Gallery
     // afterwards. Re-fetch whenever this chart's images change anywhere in the app.
-    const unsubscribe = onChartImagesChanged(chartId, load);
+    const unsubscribeImages = onChartImagesChanged(chartId, load);
+    const unsubscribeAnalyses = onChartAiAnalysesChanged(chartId, (analysis) => {
+      setAnalysesById((previous) => new Map(previous).set(
+        analysis.image_id,
+        analysis.detection_data,
+      ));
+    });
     return () => {
       cancelled = true;
-      unsubscribe();
+      unsubscribeImages();
+      unsubscribeAnalyses();
     };
   }, [chartId]);
 
@@ -201,7 +211,7 @@ export function ImageReferencePanel({ chartId }: ImageReferencePanelProps) {
                       type="button"
                       onClick={() => img.image_url && setZoomUrl(img.image_url)}
                       disabled={!img.image_url}
-                      className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-950 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       <img
                         src={img.image_url}
@@ -295,7 +305,7 @@ function PanoramicTile({
       type="button"
       onClick={onZoom}
       ref={containerRef}
-      className="relative aspect-[2/1] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-sm"
+      className="relative aspect-[2/1] w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
     >
       <img
         src={imageUrl}

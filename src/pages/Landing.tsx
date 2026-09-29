@@ -9,7 +9,12 @@ import {
   Database, 
   Menu, 
   X,
-  Stethoscope
+  Stethoscope,
+  ShieldCheck,
+  ScanLine,
+  CheckCircle2,
+  LockKeyhole,
+  UserRound
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -113,16 +118,20 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section (Clean solid background color) */}
-      <section className="relative pt-16 pb-24 bg-white border-b border-slate-100">
+      <section className="relative isolate overflow-hidden pt-16 pb-24 bg-white border-b border-slate-100">
+        <div className="absolute -top-48 right-[-8rem] h-[32rem] w-[32rem] rounded-full bg-teal-50/80 blur-3xl -z-10" />
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-12 gap-12 items-center">
           <div className="md:col-span-6 flex flex-col gap-6 text-center md:text-left">
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight text-slate-900">
-              The Intelligent Way to Manage <span className="text-primary">Dental Records</span>
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800 mx-auto md:mx-0">
+              <ShieldCheck className="h-3.5 w-3.5" /> Built for confident clinical decisions
+            </div>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] text-slate-900">
+              The calm, connected way to manage <span className="text-primary">dental care.</span>
             </h1>
             
             <p className="text-lg text-slate-600 font-medium leading-relaxed max-w-xl">
-              Centralized patient charting, real-time tooth visualization, and preliminary AI diagnosis on panoramic X-rays—tailored for Dentists and Dental Assistants.
+              A complete clinical workspace for patient records, visual charting, and AI-assisted X-ray review—designed around the way dental teams actually work.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start mt-2">
@@ -138,30 +147,37 @@ export default function LandingPage() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-slate-200/80 mt-4">
+            <div className="grid grid-cols-3 gap-4 pt-8 border-t border-slate-200/80 mt-4 text-left">
               <div>
-                <span className="block text-2xl lg:text-3xl font-extrabold text-slate-900">30+ min</span>
-                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Manual Charting to &lt; 5m</span>
+                <span className="block text-2xl lg:text-3xl font-extrabold text-slate-900">One view</span>
+                <span className="text-[10px] sm:text-xs font-medium text-slate-500 uppercase tracking-wider">Complete clinical context</span>
               </div>
               <div>
-                <span className="block text-2xl lg:text-3xl font-extrabold text-slate-900">100%</span>
-                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Paperless Record Transition</span>
+                <span className="block text-2xl lg:text-3xl font-extrabold text-slate-900">Live</span>
+                <span className="text-[10px] sm:text-xs font-medium text-slate-500 uppercase tracking-wider">Tooth-level charting</span>
               </div>
               <div>
-                <span className="block text-2xl lg:text-3xl font-extrabold text-slate-900">Instant</span>
-                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Patient History Access</span>
+                <span className="block text-2xl lg:text-3xl font-extrabold text-slate-900">Clear</span>
+                <span className="text-[10px] sm:text-xs font-medium text-slate-500 uppercase tracking-wider">AI support, clinician-led</span>
               </div>
             </div>
           </div>
 
           {/* Interactive Mockup Visual */}
           <div className="md:col-span-6 relative flex justify-center">
-            <div className="relative w-full max-w-[520px] aspect-[4/3] rounded-3xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-300">
-              <svg className="absolute inset-0 w-full h-full text-slate-200 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                <line x1="0" y1="0" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                <line x1="100%" y1="0" x2="0" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-              </svg>
+            <div className="relative w-full max-w-[540px] rounded-[2rem] overflow-hidden bg-slate-900 p-3 shadow-2xl shadow-slate-900/15">
+              <div className="rounded-[1.45rem] bg-slate-50 p-4 sm:p-5">
+                <div className="mb-5 flex items-center justify-between">
+                  <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-teal-500 text-white"><UserRound className="h-5 w-5" /></div><div><p className="text-sm font-bold text-slate-900">Sirinapa W.</p><p className="text-xs text-slate-500">HN 0001248 · Today</p></div></div>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">ACTIVE VISIT</span>
+                </div>
+                <div className="grid grid-cols-[1.2fr_.8fr] gap-3">
+                  <div className="rounded-2xl bg-white p-4 border border-slate-200"><div className="flex items-center justify-between"><p className="text-xs font-bold text-slate-700">Dental chart</p><Activity className="h-4 w-4 text-teal-600" /></div><div className="mt-4 grid grid-cols-8 gap-1.5">{Array.from({ length: 16 }).map((_, i) => <span key={i} className={`h-8 rounded-md border ${[2, 5, 10].includes(i) ? 'border-amber-300 bg-amber-50' : 'border-teal-200 bg-teal-50'}`} />)}</div><div className="mt-2 grid grid-cols-8 gap-1.5">{Array.from({ length: 16 }).map((_, i) => <span key={i} className={`h-8 rounded-md border ${i === 7 ? 'border-rose-300 bg-rose-50' : 'border-teal-200 bg-teal-50'}`} />)}</div><p className="mt-4 text-[10px] font-medium text-slate-500">Tap a tooth to record status and treatment.</p></div>
+                  <div className="space-y-3"><div className="rounded-2xl bg-teal-500 p-4 text-white"><ScanLine className="h-5 w-5" /><p className="mt-5 text-xs font-bold">AI review ready</p><p className="mt-1 text-[10px] leading-relaxed text-teal-100">Suggestions await clinical confirmation.</p></div><div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Visit checklist</p><div className="mt-3 space-y-2">{['History reviewed', 'X-ray attached', 'Chart updated'].map(item => <div key={item} className="flex items-center gap-2 text-[10px] font-medium text-slate-600"><CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />{item}</div>)}</div></div></div>
+                </div>
+              </div>
             </div>
+            <div className="absolute -bottom-5 -left-2 sm:-left-8 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-lg"><LockKeyhole className="h-4 w-4 text-teal-700"/><span className="text-xs font-bold text-slate-700">Structured & secure records</span></div>
           </div>
         </div>
       </section>
@@ -298,11 +314,14 @@ export default function LandingPage() {
 
             {/* Right Column - Mockup */}
             <div className="md:col-span-6">
-              <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-slate-800 border-2 border-dashed border-slate-700">
-                <svg className="absolute inset-0 w-full h-full text-slate-700 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                  <line x1="0" y1="0" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                  <line x1="100%" y1="0" x2="0" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-                </svg>
+              <div className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-slate-700 bg-slate-800 p-6 sm:p-8">
+                <div className="flex items-center justify-between"><p className="text-sm font-bold text-white">Today’s consultation</p><span className="text-xs font-medium text-slate-400">4 of 4 complete</span></div>
+                <div className="mt-8 space-y-4">{[
+                  ['Patient history', 'Allergies and medical alerts reviewed', 'Complete'],
+                  ['Imaging review', 'Panoramic X-ray attached', 'Complete'],
+                  ['Dental chart', '3 findings recorded', 'Complete'],
+                  ['Care plan', 'Ready to discuss with patient', 'Ready'],
+                ].map(([title, detail, state], i) => <div key={title} className="flex items-center gap-4 rounded-2xl border border-slate-700 bg-slate-900/60 p-3"><div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${i === 3 ? 'bg-teal-500 text-white' : 'bg-slate-700 text-teal-300'}`}>{i === 3 ? <CheckCircle2 className="h-4 w-4"/> : i + 1}</div><div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-100">{title}</p><p className="mt-0.5 truncate text-[10px] text-slate-400">{detail}</p></div><span className="text-[10px] font-semibold text-teal-300">{state}</span></div>)}</div>
               </div>
             </div>
           </div>
@@ -312,12 +331,10 @@ export default function LandingPage() {
       {/* Interactive AI Demo Section */}
       <section id="ai-demo" className="py-24 max-w-7xl mx-auto px-6">
         <div className="flex flex-col items-center gap-8">
-          <span className="text-xs font-bold uppercase tracking-widest text-primary">AI Diagnostics Demo</span>
-          <div className="relative w-full max-w-[800px] aspect-[16/9] rounded-3xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-300">
-            <svg className="absolute inset-0 w-full h-full text-slate-200 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="0" y1="0" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-              <line x1="100%" y1="0" x2="0" y2="100%" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
-            </svg>
+          <span className="text-xs font-bold uppercase tracking-widest text-primary">AI Diagnostics</span>
+          <div className="grid w-full max-w-[980px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 md:grid-cols-2">
+            <div className="relative min-h-[280px] overflow-hidden bg-slate-800 p-6"><div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '16px 16px' }} /><div className="relative h-full rounded-2xl border border-slate-600 bg-slate-700/50"><div className="absolute left-[24%] top-[28%] h-16 w-16 rounded-full border-2 border-amber-400"><span className="absolute -top-6 left-0 rounded bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-slate-900">Review</span></div><div className="absolute right-[22%] bottom-[20%] h-12 w-12 rounded-full border-2 border-teal-400"><span className="absolute -bottom-6 -left-1 rounded bg-teal-400 px-1.5 py-0.5 text-[9px] font-bold text-slate-900">Tooth 36</span></div><div className="absolute inset-x-8 top-1/2 h-16 -translate-y-1/2 rounded-[50%] border-y border-slate-300/40" /></div><span className="absolute bottom-6 left-6 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Panoramic image preview</span></div>
+            <div className="p-7 sm:p-9"><div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-700"><Cpu className="h-3.5 w-3.5"/> Clinical decision support</div><h3 className="mt-5 text-2xl font-extrabold tracking-tight text-slate-900">Helpful second look.<br/>Always clinician-reviewed.</h3><p className="mt-3 text-sm leading-relaxed text-slate-600">AI flags areas that may warrant attention, while the dentist remains in control of every recorded diagnosis and treatment decision.</p><div className="mt-6 border-t border-slate-100 pt-5 text-xs text-slate-500"><span className="font-bold text-slate-700">Important:</span> Results are preliminary suggestions and are not a diagnosis.</div></div>
           </div>
         </div>
       </section>

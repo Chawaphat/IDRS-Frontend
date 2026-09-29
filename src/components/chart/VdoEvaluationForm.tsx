@@ -8,7 +8,7 @@ import { vdoEvaluationService } from "@/services/vdoEvaluationService";
 import type { VdoEvaluationUpdate, FacialConditionType, BiteType } from "@/services/types/vdoEvaluation";
 import { SectionNotes } from "./components/SectionNotes";
 import { useSectionSave } from "@/hooks/useSectionSave";
-import { ToothLoaderIcon } from "@/components/ui/ToothLoader";
+import { ChartSectionSkeleton } from "./components/ChartSectionSkeleton";
 
 interface VdoEvaluationFormProps {
   chartId: string;
@@ -102,11 +102,7 @@ export default function VdoEvaluationForm({ chartId }: VdoEvaluationFormProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <ToothLoaderIcon className="w-12 h-12" />
-      </div>
-    );
+    return <ChartSectionSkeleton />;
   }
 
   const isVdoLost = formData.free_way_space !== null && formData.free_way_space !== undefined && formData.free_way_space > 4;

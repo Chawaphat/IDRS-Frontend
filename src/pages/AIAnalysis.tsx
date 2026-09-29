@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  CheckCircle2,
   CircleDot,
   Cpu,
   Eye,
@@ -60,6 +61,7 @@ export default function AIAnalysisPage() {
   const [dragOver, setDragOver] = useState(false);
   const [conf, setConf] = useState(0.25);
   const [showConfPanel, setShowConfPanel] = useState(false);
+  const [clinicianReviewed, setClinicianReviewed] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentFileRef = useRef<File | null>(null);
@@ -95,6 +97,7 @@ export default function AIAnalysisPage() {
       currentFileRef.current = file;
       setFileName(file.name);
       setResult(null);
+      setClinicianReviewed(false);
       setShowConfPanel(false);
       setImageUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -119,6 +122,7 @@ export default function AIAnalysisPage() {
     setFileName(null);
     setImageUrl(null);
     setResult(null);
+    setClinicianReviewed(false);
     setShowConfPanel(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -146,7 +150,7 @@ export default function AIAnalysisPage() {
   const hasResult = !!result && !!imageUrl;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 w-full flex flex-col gap-6">
+    <div className="max-w-6xl mx-auto px-6 py-10 max-md:px-2 w-full flex flex-col gap-6">
       {/* Header — carries the compact upload toolbar once a result exists */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
@@ -154,7 +158,8 @@ export default function AIAnalysisPage() {
             <Activity className="w-6 h-6 text-teal-600" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">AI Analysis</h2>
+            <div className="clinical-eyebrow mb-1">Clinical decision support</div>
+            <h2 className="clinical-page-title text-3xl font-bold text-slate-900">AI Analysis</h2>
             <p className="text-slate-500 mt-1">
               Detect dental conditions on a panoramic X-ray. Standalone — not saved to any patient record.
             </p>
@@ -213,6 +218,18 @@ export default function AIAnalysisPage() {
           </div>
         )}
       </div>
+
+      {hasResult && (
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border px-5 py-4 ${clinicianReviewed ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/70'}`}>
+          <div className="flex items-start gap-3">
+            {clinicianReviewed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />}
+            <div><p className={`text-sm font-bold ${clinicianReviewed ? 'text-emerald-900' : 'text-amber-900'}`}>{clinicianReviewed ? 'Clinician review recorded for this session' : 'AI suggestions require clinical review'}</p><p className={`mt-0.5 text-xs ${clinicianReviewed ? 'text-emerald-800' : 'text-amber-800'}`}>AI results are not a diagnosis and are not saved to a patient record from this page.</p></div>
+          </div>
+          <Button type="button" variant="outline" onClick={() => setClinicianReviewed(value => !value)} className={clinicianReviewed ? 'border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50' : 'border-amber-300 bg-white text-amber-800 hover:bg-amber-50'}>
+            <CheckCircle2 className="mr-2 h-4 w-4" />{clinicianReviewed ? 'Mark as not reviewed' : 'Mark as reviewed'}
+          </Button>
+        </div>
+      )}
 
       {/* Pre-analysis: upload card + two detailed info cards */}
       {!hasResult && (

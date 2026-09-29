@@ -8,7 +8,6 @@ import { ToggleButtonGroup } from '@/components/ui/ToggleButton';
 import { occlusalAnalysisService, type OcclusalAnalysisPayload, type OcclusalContactType } from '@/services/occlusalAnalysisService';
 import { useToastStore } from '@/store/toastStore';
 import { useSectionSave } from '@/hooks/useSectionSave';
-import { ToothLoaderIcon } from '@/components/ui/ToothLoader';
 import { SectionNotes } from '@/components/chart/components/SectionNotes';
 import {
   Tooltip,
@@ -22,7 +21,7 @@ type ContactType = 'mip' | 'premature' | 'protrusive' | 'working' | 'nonWorking'
 
 const TOOTH_COLORS = [
   "#14b8a6", "#f43f5e", "#8b5cf6", "#f59e0b", "#3b82f6",
-  "#ec4899", "#10b981", "#a855f7", "#ef4444", "#0ea5e9",
+  "#ec4899", "#0d9488", "#a855f7", "#ef4444", "#0ea5e9",
   "#84cc16", "#f97316", "#6366f1"
 ];
 const getToothColor = (id: number) => TOOTH_COLORS[id % TOOTH_COLORS.length];
@@ -387,11 +386,7 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
   }, [updateLines]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center py-20">
-        <ToothLoaderIcon className="w-12 h-12" />
-      </div>
-    );
+    return <OcclusalAnalysisSkeleton />;
   }
 
   return (
@@ -880,6 +875,49 @@ export default function OcclusalAnalysis({ chartId }: OcclusalAnalysisProps) {
         value={note}
         onChange={(val) => { setNote(val); markDirty(); }}
       />
+    </div>
+  );
+}
+
+function OcclusalAnalysisSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-6xl animate-pulse space-y-8 px-4 pb-16 sm:px-6">
+      <div className="flex items-end justify-between border-b border-slate-200 pb-5">
+        <div className="space-y-3">
+          <div className="h-7 w-56 rounded-md bg-slate-200" />
+          <div className="h-4 w-80 max-w-full rounded bg-slate-100" />
+        </div>
+        <div className="h-10 w-32 rounded-lg bg-slate-100" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">
+        <div className="space-y-3">
+          <div className="h-4 w-24 rounded bg-slate-200" />
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className="h-16 rounded-xl bg-slate-200" />
+          ))}
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+          <div className="flex justify-between">
+            <div className="h-5 w-40 rounded bg-slate-200" />
+            <div className="h-8 w-24 rounded-lg bg-slate-100" />
+          </div>
+          <div className="mt-8 grid grid-cols-8 gap-2 sm:gap-3">
+            {Array.from({ length: 32 }, (_, index) => (
+              <div key={index} className="aspect-square rounded-lg bg-slate-100" />
+            ))}
+          </div>
+          <div className="mt-8 border-t border-slate-100 pt-5">
+            <div className="h-4 w-32 rounded bg-slate-200" />
+            <div className="mt-3 h-10 rounded-xl bg-slate-100" />
+          </div>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="h-6 w-72 rounded bg-slate-200" />
+        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => <div key={index} className="h-20 rounded-xl bg-slate-100" />)}
+        </div>
+      </div>
     </div>
   );
 }
