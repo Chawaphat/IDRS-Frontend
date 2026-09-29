@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSectionSaveStore } from '@/store/sectionSaveStore';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
-import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft, Download } from 'lucide-react';
+import { pdf } from '@react-pdf/renderer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,6 +29,8 @@ import { patientService, type BackendPatient } from '@/services/patientService';
 import { imageManagementService } from '@/services/imageManagementService';
 import { dentalChartService } from '@/services/dentalChartService';
 import { estheticEvaluationService } from '@/services/estheticEvaluationService';
+import { pdfExportService } from '@/services/pdfExportService';
+import { ClinicalChartPdfDocument } from '@/components/ClinicalChartPdfDocument';
 import type { DentalChart } from '@/services/types/dentalChart';
 import { useToastStore } from '@/store/toastStore';
 import MedicalHistoryForm from '@/components/chart/MedicalHistoryForm';
@@ -129,6 +132,7 @@ export default function SequentialPatientPage() {
     const [hasMedications, setHasMedications] = useState<boolean | null>(null);
 
     const [isUploading, setIsUploading] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
 
     useEffect(() => {
         const fetchChartDetails = async () => {
@@ -214,6 +218,28 @@ export default function SequentialPatientPage() {
         navigate(`/patients/${patientId}`);
     };
 
+    const handlePdfExport = async () => {
+        if (!chartId) return;
+        try {
+            setIsExportingPdf(true);
+            const exportData = await pdfExportService.getChartExportData(chartId);
+            const blob = await pdf(<ClinicalChartPdfDocument data={exportData} />).toBlob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `IDRS-Clinical-Chart-${String(exportData.patient.hn_number ?? chartId)}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+            showToast('Clinical chart PDF downloaded.', 'success');
+        } catch (err) {
+            console.error('Failed to export clinical chart PDF', err);
+            showToast('Could not create the PDF. Please try again.', 'error');
+        } finally {
+            setIsExportingPdf(false);
+        }
+    };
+
     const backPath = `/patients/${patientId}`;
 
     if (loading) {
@@ -269,6 +295,10 @@ export default function SequentialPatientPage() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-3">
+                    <Button variant="outline" onClick={handlePdfExport} disabled={isExportingPdf} className="h-10 rounded-xl border-slate-300 px-3 text-slate-700 hover:bg-slate-100 sm:h-11 sm:px-4">
+                        <Download className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">{isExportingPdf ? 'Creating PDF...' : 'Export PDF'}</span>
+                    </Button>
                     <Button onClick={handleSave} className="bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/10 rounded-xl h-10 sm:h-11 px-3 sm:px-6">
                         <Save className="w-4 h-4 sm:mr-2" />
                         <span className="hidden sm:inline">Save record</span>
