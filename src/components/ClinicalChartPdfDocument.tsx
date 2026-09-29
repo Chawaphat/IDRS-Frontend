@@ -186,8 +186,11 @@ const styles = StyleSheet.create({
   toothDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   toothDetailNumber: { fontSize: 9, fontWeight: 700, color: colors.ink },
   toothDetailType: { fontSize: 5.8, color: colors.teal, backgroundColor: colors.tealSoft, borderRadius: 7, paddingVertical: 2, paddingHorizontal: 5 },
-  findingLine: { fontSize: 6.3, color: colors.text, lineHeight: 1.35, marginBottom: 3 },
-  findingLabel: { color: colors.muted },
+  findingRow: { flexDirection: 'row', alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: '#edf2f3', paddingVertical: 5 },
+  findingLabel: { width: '28%', fontSize: 5.8, fontWeight: 700, color: colors.teal, paddingRight: 5 },
+  findingBody: { width: '72%' },
+  findingValue: { fontSize: 6.5, color: colors.text, lineHeight: 1.35 },
+  findingNote: { fontSize: 5.8, color: colors.muted, lineHeight: 1.35, marginTop: 2 },
 
   occlusalMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 8 },
   metricCard: { width: '24.25%', backgroundColor: '#ffffff', borderWidth: 1, borderColor: colors.border, borderRadius: 6, padding: 6 },
@@ -524,8 +527,100 @@ function ResidualRidgePage({ data }: { data: ChartExportData }) {
   );
 }
 
+const odontogramStatePrefix = 'IDRS_ODONTOGRAM_STATE_V1:';
+
+type ToothFinding = { label: string; value: string; note?: string };
+
+function decodeOdontogramState(note: unknown): PdfExportRecord | null {
+  if (typeof note !== 'string' || !note.startsWith(odontogramStatePrefix)) return null;
+  try {
+    const parsed = JSON.parse(note.slice(odontogramStatePrefix.length));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as PdfExportRecord : null;
+  } catch {
+    return null;
+  }
+}
+
+function cleanNote(note: unknown) {
+  return typeof note === 'string' && note.trim() && !note.startsWith(odontogramStatePrefix) ? note.trim() : undefined;
+}
+
+function findingValue(record: PdfExportRecord, fields: Array<{ key: string; label: string; unit?: string }>) {
+  return fields
+    .filter(({ key }) => isPresent(record[key]))
+    .map(({ key, label, unit = '' }) => `${label}: ${pretty(record[key])}${unit}`)
+    .join(' | ');
+}
+
+function odontogramStateFindings(note: unknown): ToothFinding[] {
+  const state = decodeOdontogramState(note);
+  if (!state) return [];
+
+  const conditions: string[] = [];
+  const selection = String(state.toothSelection ?? '');
+  const fractureSurfaces = new Set<string>();
+  if (state.brokenMesial || selection.includes('mesial')) fractureSurfaces.add('Mesial');
+  if (state.brokenIncisal || selection.includes('inicisal')) fractureSurfaces.add('Incisal');
+  if (state.brokenDistal || selection.includes('distal')) fractureSurfaces.add('Distal');
+  if (fractureSurfaces.size > 0 || state.crownMaterial === 'broken') conditions.push(`Fracture${fractureSurfaces.size > 0 ? ` (${Array.from(fractureSurfaces).join(', ')})` : ''}`);
+
+  if (selection === 'tooth-crownprep') conditions.push('Crown preparation');
+  if (selection === 'tooth-radix') conditions.push('Retained root');
+  if (state.fissureSealing) conditions.push('Fissure sealant');
+  if (state.contactMesial || state.contactDistal) {
+    const sides = [state.contactMesial && 'mesial', state.contactDistal && 'distal'].filter(Boolean).join(', ');
+    conditions.push(`Missing contact (${sides})`);
+  }
+  if (state.bruxismWear) conditions.push('Occlusal wear from bruxism');
+  if (state.bruxismNeckWear) conditions.push('Cervical wear from bruxism');
+  if (state.extractionPlan) conditions.push('Planned extraction');
+  if (state.endoResection) conditions.push('Endodontic resection');
+  if (state.parapulpalPin) conditions.push('Parapulpal pin');
+  if (state.crownReplace) conditions.push('Crown replacement indicated');
+  if (state.crownNeeded) conditions.push('Crown indicated');
+  if (state.missingClosed) conditions.push('Closed edentulous space');
+  if (state.bridgePillar) conditions.push('Bridge abutment');
+  if (isPresent(state.bridgeUnit) && state.bridgeUnit !== 'none') conditions.push(`Bridge unit: ${pretty(state.bridgeUnit)}`);
+
+  const findings: ToothFinding[] = conditions.length > 0 ? [{ label: 'Other findings', value: conditions.join(', ') }] : [];
+  const notes = [cleanNote(state.note), cleanNote(state.othersNote)].filter(Boolean) as string[];
+  if (notes.length > 0) findings.push({ label: 'Clinical note', value: notes.join(' | ') });
+  return findings;
+}
+
+function toothFindings(tooth: PdfExportRecord): ToothFinding[] {
+  const findings: ToothFinding[] = [];
+  const edentulous = asRecord(tooth.edentulous);
+  if (Object.keys(edentulous).length > 0) findings.push({ label: 'Edentulous', value: findingValue(edentulous, [{ key: 'edentulous_type', label: 'Type' }]), note: cleanNote(edentulous.note) });
+
+  asRecords(tooth.caries).forEach((caries, index) => findings.push({
+    label: `Caries ${index + 1}`,
+    value: findingValue(caries, [{ key: 'surface', label: 'Surface' }, { key: 'depth', label: 'Depth' }]),
+    note: cleanNote(caries.note),
+  }));
+  asRecords(tooth.fillings).forEach((filling, index) => findings.push({
+    label: `Filling ${index + 1}`,
+    value: findingValue(filling, [{ key: 'surfaces', label: 'Surfaces' }, { key: 'material', label: 'Material' }, { key: 'size_mm', label: 'Size', unit: ' mm' }]),
+    note: cleanNote(filling.note),
+  }));
+
+  const periodontal = asRecord(tooth.periodontal);
+  if (Object.keys(periodontal).length > 0) findings.push({ label: 'Periodontal', value: findingValue(periodontal, [{ key: 'mobility_grade', label: 'Mobility' }, { key: 'recession_mm', label: 'Recession', unit: ' mm' }]), note: cleanNote(periodontal.note) });
+  const vitality = asRecord(tooth.vitality);
+  if (Object.keys(vitality).length > 0) findings.push({ label: 'Pulp / endodontic', value: findingValue(vitality, [{ key: 'pulp_status', label: 'Pulp' }, { key: 'ept_result', label: 'EPT' }, { key: 'root_canal_treated', label: 'Root canal' }]), note: cleanNote(vitality.note) });
+  const restoration = asRecord(tooth.restorations);
+  if (Object.keys(restoration).length > 0) findings.push({ label: 'Restoration', value: findingValue(restoration, [{ key: 'restoration_type', label: 'Type' }, { key: 'material', label: 'Material' }, { key: 'post_type', label: 'Post' }]), note: cleanNote(restoration.note) });
+  const implant = asRecord(tooth.implant);
+  if (Object.keys(implant).length > 0) findings.push({ label: 'Implant', value: findingValue(implant, [{ key: 'component_type', label: 'Component' }, { key: 'retention_type', label: 'Retention' }, { key: 'material', label: 'Material' }, { key: 'brand', label: 'Implant brand' }, { key: 'crown_brand', label: 'Crown brand' }]), note: cleanNote(implant.note) });
+
+  findings.push(...odontogramStateFindings(tooth.note));
+  const note = cleanNote(tooth.note);
+  if (note) findings.push({ label: 'Clinical note', value: note });
+  return findings.filter((finding) => finding.value || finding.note);
+}
+
 function toothHasFinding(tooth: PdfExportRecord) {
-  return tooth.tooth_type !== 'permanent' || isPresent(tooth.note) || isPresent(tooth.edentulous) || asRecords(tooth.caries).length > 0 || asRecords(tooth.fillings).length > 0 || isPresent(tooth.periodontal) || isPresent(tooth.vitality) || isPresent(tooth.restorations) || isPresent(tooth.implant);
+  return tooth.tooth_type !== 'permanent' || toothFindings(tooth).length > 0;
 }
 
 function toothTags(tooth: PdfExportRecord | undefined) {
@@ -557,27 +652,12 @@ function ToothArch({ numbers, records, label }: { numbers: number[]; records: Ma
   return <View><Text style={styles.archLabel}>{label}</Text><View style={styles.toothRow}>{numbers.map((number) => { const tooth = records.get(number); return <View key={number} style={[styles.toothTile, { backgroundColor: toothColor(tooth) }]}><Text style={styles.toothNumber}>{number}</Text><Text style={styles.toothState}>{toothTags(tooth).join('\n')}</Text></View>; })}</View></View>;
 }
 
-function compactObject(value: unknown) {
-  const source = asRecord(value);
-  return Object.entries(source).filter(([key, item]) => !hiddenKeys.has(key) && isPresent(item)).map(([key, item]) => `${humanize(key)}: ${pretty(item)}`).join(' · ');
-}
-
 function ToothDetailCard({ tooth }: { tooth: PdfExportRecord }) {
-  const lines: { label: string; value: string }[] = [];
-  const caries = asRecords(tooth.caries);
-  const fillings = asRecords(tooth.fillings);
-  if (tooth.edentulous) lines.push({ label: 'Edentulous', value: compactObject(tooth.edentulous) });
-  caries.forEach((item, index) => lines.push({ label: `Caries ${index + 1}`, value: compactObject(item) }));
-  fillings.forEach((item, index) => lines.push({ label: `Filling ${index + 1}`, value: compactObject(item) }));
-  if (tooth.periodontal) lines.push({ label: 'Periodontal', value: compactObject(tooth.periodontal) });
-  if (tooth.vitality) lines.push({ label: 'Vitality / endodontic', value: compactObject(tooth.vitality) });
-  if (tooth.restorations) lines.push({ label: 'Restoration', value: compactObject(tooth.restorations) });
-  if (tooth.implant) lines.push({ label: 'Implant', value: compactObject(tooth.implant) });
-  if (isPresent(tooth.note)) lines.push({ label: 'Note', value: pretty(tooth.note) });
+  const lines = toothFindings(tooth);
   return (
     <View style={styles.toothDetail} wrap={false}>
       <View style={styles.toothDetailHeader}><Text style={styles.toothDetailNumber}>Tooth {pretty(tooth.tooth_number)}</Text><Text style={styles.toothDetailType}>{pretty(tooth.tooth_type)}</Text></View>
-      {lines.map((line, index) => <Text key={`${line.label}-${index}`} style={styles.findingLine}><Text style={styles.findingLabel}>{line.label}: </Text>{line.value}</Text>)}
+      {lines.map((line, index) => <View key={`${line.label}-${index}`} style={styles.findingRow}><Text style={styles.findingLabel}>{line.label}</Text><View style={styles.findingBody}><Text style={styles.findingValue}>{line.value}</Text>{line.note && <Text style={styles.findingNote}>{`Note: ${line.note}`}</Text>}</View></View>)}
     </View>
   );
 }
@@ -585,7 +665,7 @@ function ToothDetailCard({ tooth }: { tooth: PdfExportRecord }) {
 function DentalStatusPage({ data }: { data: ChartExportData }) {
   const teeth = asRecords(data.dental_status?.teeth);
   const records = new Map(teeth.map((tooth) => [Number(tooth.tooth_number), tooth]));
-  const findings = teeth.filter(toothHasFinding).sort((left, right) => Number(left.tooth_number) - Number(right.tooth_number));
+  const findings = Array.from(records.values()).filter(toothHasFinding).sort((left, right) => Number(left.tooth_number) - Number(right.tooth_number));
   return (
     <PageShell data={data} title="Dental Status" hint="A tooth-by-tooth FDI chart with a complete detail card for every recorded clinical finding.">
       <View style={styles.toothChart} wrap={false}>
@@ -599,14 +679,28 @@ function DentalStatusPage({ data }: { data: ChartExportData }) {
           <View style={styles.legendItem}><View style={[styles.legendSwatch, { backgroundColor: '#e2e8f0' }]} /><Text>Edentulous</Text></View>
         </View>
       </View>
-      <View style={[styles.sectionHeader, { marginBottom: 7 }]} wrap={false}><View style={styles.sectionAccent} /><View><Text style={styles.sectionEyebrow}>RECORDED FINDINGS</Text><Text style={[styles.sectionTitle, { fontSize: 10 }]}>Teeth requiring attention ({findings.length})</Text></View></View>
+      <View style={[styles.sectionHeader, { marginBottom: 7 }]} wrap={false}><View style={styles.sectionAccent} /><View><Text style={styles.sectionEyebrow}>RECORDED FINDINGS</Text><Text style={[styles.sectionTitle, { fontSize: 10 }]}>{`Teeth requiring attention (${findings.length})`}</Text></View></View>
       {findings.length > 0 ? <View style={styles.toothDetailsGrid}>{findings.map((tooth) => <ToothDetailCard key={String(tooth.tooth_number)} tooth={tooth} />)}</View> : <View style={styles.card}><Text style={styles.empty}>No tooth-level findings recorded.</Text></View>}
     </PageShell>
   );
 }
 
-const contactColors = ['#14b8a6', '#f43f5e', '#8b5cf6', '#f59e0b', '#3b82f6', '#ec4899', '#0d9488', '#a855f7', '#ef4444', '#0ea5e9', '#84cc16', '#f97316', '#6366f1'];
-const contactColor = (tooth: number) => contactColors[tooth % contactColors.length];
+const contactPalettes = [
+  { strong: '#14b8a6', soft: '#e6fffb' },
+  { strong: '#f43f5e', soft: '#fff1f3' },
+  { strong: '#8b5cf6', soft: '#f3efff' },
+  { strong: '#f59e0b', soft: '#fff7df' },
+  { strong: '#3b82f6', soft: '#edf5ff' },
+  { strong: '#ec4899', soft: '#fff0f7' },
+  { strong: '#0d9488', soft: '#e7faf7' },
+  { strong: '#a855f7', soft: '#f8efff' },
+  { strong: '#ef4444', soft: '#fff0f0' },
+  { strong: '#0ea5e9', soft: '#ebf8ff' },
+  { strong: '#84cc16', soft: '#f5fce8' },
+  { strong: '#f97316', soft: '#fff3e9' },
+  { strong: '#6366f1', soft: '#f0f1ff' },
+];
+const contactPalette = (tooth: number) => contactPalettes[tooth % contactPalettes.length];
 const isLeftContact = (upper: number, lower: number) => (upper >= 21 && upper <= 28) || (lower >= 31 && lower <= 38);
 const isRightContact = (upper: number, lower: number) => (upper >= 11 && upper <= 18) || (lower >= 41 && lower <= 48);
 const isInterference = (type: string, upper: number, lower: number) => (type === 'working' && isLeftContact(upper, lower)) || (type === 'non_working' && isRightContact(upper, lower));
@@ -634,16 +728,17 @@ function ContactChart({ type, contacts }: { type: typeof contactTypes[number]; c
           const upperPosition = upperIndex.get(upper); const lowerPosition = lowerIndex.get(lower);
           if (upperPosition === undefined || lowerPosition === undefined) return null;
           const x1 = centerX(upperPosition); const x2 = centerX(lowerPosition);
-          const color = isInterference(type.key, upper, lower) ? colors.rose : contactColor(upper);
-          return <Path key={`line-${index}`} d={`M ${x1} ${upperY + boxSize} C ${x1} 68, ${x2} 82, ${x2} ${lowerY}`} fill="none" stroke={color} strokeWidth="1.8" strokeDasharray={isInterference(type.key, upper, lower) ? '4 3' : undefined} />;
+          const interference = isInterference(type.key, upper, lower);
+          const color = interference ? colors.rose : contactPalette(upper).strong;
+          return <Path key={`line-${index}`} d={`M ${x1} ${upperY + boxSize} C ${x1} 68, ${x2} 82, ${x2} ${lowerY}`} fill="none" stroke={color} strokeOpacity={interference ? 0.95 : 0.68} strokeWidth="1.8" strokeDasharray={interference ? '4 3' : undefined} />;
         })}
-        {upperTeeth.map((tooth, index) => { const active = pairedUpper.has(tooth); const color = contactColor(tooth); return <Fragment key={`upper-${tooth}`}><Rect x={startX + (index * step)} y={upperY} width={boxSize} height={boxSize} rx="6" fill={active ? `${color}22` : '#ffffff'} stroke={active ? color : '#cbd5e1'} strokeWidth={active ? 1.7 : 1} /><SvgText x={centerX(index)} y={upperY + 17} textAnchor="middle" fontSize="8" fill={active ? color : '#475569'}>{tooth}</SvgText></Fragment>; })}
-        {lowerTeeth.map((tooth, index) => { const upper = pairedLower.get(tooth); const active = upper !== undefined; const color = active ? contactColor(upper) : '#475569'; return <Fragment key={`lower-${tooth}`}><Rect x={startX + (index * step)} y={lowerY} width={boxSize} height={boxSize} rx="6" fill={active ? `${color}22` : '#ffffff'} stroke={active ? color : '#cbd5e1'} strokeWidth={active ? 1.7 : 1} /><SvgText x={centerX(index)} y={lowerY + 17} textAnchor="middle" fontSize="8" fill={color}>{tooth}</SvgText></Fragment>; })}
+        {upperTeeth.map((tooth, index) => { const active = pairedUpper.has(tooth); const palette = contactPalette(tooth); return <Fragment key={`upper-${tooth}`}><Rect x={startX + (index * step)} y={upperY} width={boxSize} height={boxSize} rx="6" fill={active ? palette.soft : '#ffffff'} stroke={active ? palette.strong : '#cbd5e1'} strokeWidth={active ? 1.7 : 1} /><SvgText x={centerX(index)} y={upperY + 17} textAnchor="middle" fontSize="8" fontWeight={active ? 700 : 400} fill={active ? palette.strong : '#64748b'}>{tooth}</SvgText></Fragment>; })}
+        {lowerTeeth.map((tooth, index) => { const upper = pairedLower.get(tooth); const active = upper !== undefined; const palette = contactPalette(active ? upper : tooth); return <Fragment key={`lower-${tooth}`}><Rect x={startX + (index * step)} y={lowerY} width={boxSize} height={boxSize} rx="6" fill={active ? palette.soft : '#ffffff'} stroke={active ? palette.strong : '#cbd5e1'} strokeWidth={active ? 1.7 : 1} /><SvgText x={centerX(index)} y={lowerY + 17} textAnchor="middle" fontSize="8" fontWeight={active ? 700 : 400} fill={active ? palette.strong : '#64748b'}>{tooth}</SvgText></Fragment>; })}
         {contacts.flatMap((contact, index) => {
           const upper = Number(contact.upper_tooth); const lower = Number(contact.lower_tooth);
           const upperPosition = upperIndex.get(upper); const lowerPosition = lowerIndex.get(lower);
           if (upperPosition === undefined || lowerPosition === undefined) return [];
-          const color = isInterference(type.key, upper, lower) ? colors.rose : contactColor(upper);
+          const color = isInterference(type.key, upper, lower) ? colors.rose : contactPalette(upper).strong;
           return [<Circle key={`u-${index}`} cx={centerX(upperPosition)} cy={upperY + boxSize} r="2.5" fill={color} />, <Circle key={`l-${index}`} cx={centerX(lowerPosition)} cy={lowerY} r="2.5" fill={color} />];
         })}
       </Svg>
@@ -667,7 +762,7 @@ function OcclusalPage({ data }: { data: ChartExportData }) {
         })}
         <View style={styles.summaryCard} wrap={false}>
           <Text style={styles.summaryTitle}>Clinical overview</Text>
-          <View style={styles.summaryStats}><View style={styles.summaryStat}><Text style={styles.summaryStatValue}>{totalContacts}</Text><Text style={styles.summaryStatLabel}>Mapped pairs</Text></View><View style={styles.summaryStat}><Text style={styles.summaryStatValue}>{mappedTypes}/5</Text><Text style={styles.summaryStatLabel}>Contact types</Text></View><View style={styles.summaryStat}><Text style={styles.summaryStatValue}>{interferenceCount}</Text><Text style={styles.summaryStatLabel}>Interferences</Text></View></View>
+          <View style={styles.summaryStats}><View style={styles.summaryStat}><Text style={styles.summaryStatValue}>{totalContacts}</Text><Text style={styles.summaryStatLabel}>Mapped pairs</Text></View><View style={styles.summaryStat}><Text style={styles.summaryStatValue}>{`${mappedTypes} of 5`}</Text><Text style={styles.summaryStatLabel}>Contact types</Text></View><View style={styles.summaryStat}><Text style={styles.summaryStatValue}>{interferenceCount}</Text><Text style={styles.summaryStatLabel}>Interferences</Text></View></View>
           <Text style={styles.summaryText}>Solid colored line: mapped contact</Text><Text style={styles.summaryText}>Rose dashed line / !: balancing interference</Text><Text style={styles.summaryText}>Notes: {pretty(analysis.note)}</Text>
         </View>
       </View>

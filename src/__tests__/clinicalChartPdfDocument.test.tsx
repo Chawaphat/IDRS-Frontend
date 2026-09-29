@@ -1,4 +1,6 @@
-import { pdf } from '@react-pdf/renderer';
+// @vitest-environment node
+
+import { renderToBuffer } from '@react-pdf/renderer';
 import { describe, expect, it, vi } from 'vitest';
 import { ClinicalChartPdfDocument } from '@/components/ClinicalChartPdfDocument';
 import type { ChartExportData } from '@/services/pdfExportService';
@@ -130,16 +132,33 @@ const fixture: ChartExportData = {
         tooth_type: 'implant',
         implant: { component_type: 'crown', retention_type: 'screw_retained', brand: 'Test Implant' },
       },
+      {
+        tooth_number: 47,
+        tooth_type: 'permanent',
+        note: 'IDRS_ODONTOGRAM_STATE_V1:{"toothSelection":"tooth-base","bruxismWear":true,"contactMesial":true,"othersNote":"Review at next visit"}',
+        fillings: [{ surfaces: ['O'], material: 'composite' }],
+      },
+      {
+        tooth_number: 47,
+        tooth_type: 'permanent',
+        note: 'IDRS_ODONTOGRAM_STATE_V1:{"toothSelection":"tooth-base","bruxismWear":true,"contactMesial":true,"othersNote":"Review at next visit"}',
+        fillings: [{ surfaces: ['O'], material: 'composite' }],
+      },
+      {
+        tooth_number: 48,
+        tooth_type: 'edentulous',
+        note: 'IDRS_ODONTOGRAM_STATE_V1:{"toothSelection":"none","extractionPlan":false}',
+        edentulous: { edentulous_type: 'missing' },
+      },
     ],
   },
   images: [],
 };
 
 describe('ClinicalChartPdfDocument', () => {
-  it('renders a complete clinical payload to a PDF blob', async () => {
-    const blob = await pdf(<ClinicalChartPdfDocument data={fixture} />).toBlob();
+  it('renders a complete clinical payload to a PDF buffer', async () => {
+    const buffer = await renderToBuffer(<ClinicalChartPdfDocument data={fixture} />);
 
-    expect(blob.type).toBe('application/pdf');
-    expect(blob.size).toBeGreaterThan(10_000);
+    expect(buffer.byteLength).toBeGreaterThan(10_000);
   }, 30_000);
 });
