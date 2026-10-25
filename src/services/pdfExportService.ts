@@ -18,7 +18,7 @@ export interface ChartExportData {
 
 export const pdfExportService = {
   getChartExportData: async (chartId: string): Promise<ChartExportData> => {
-    const response = await api.get<ChartExportData>(`/dental-charts/${chartId}/export-data`);
+    const response = await api.get<ChartExportData>(`/dental-charts/${chartId}/export-data`, { timeout: 30_000 });
     return response.data;
   },
 };

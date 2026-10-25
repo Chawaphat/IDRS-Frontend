@@ -1,8 +1,14 @@
 // @vitest-environment node
+/// <reference types="node" />
 
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { emptyChartPdfAssets } from '@/components/pdf/chartPdfAssets';
 import { renderToBuffer } from '@react-pdf/renderer';
+import { Children, isValidElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ClinicalChartPdfDocument } from '@/components/ClinicalChartPdfDocument';
+import type { ChartPdfAssets } from '@/components/pdf/chartPdfAssets';
 import type { ChartExportData } from '@/services/pdfExportService';
 
 vi.mock('@fontsource/noto-sans-thai/files/noto-sans-thai-thai-400-normal.woff', () => ({
@@ -11,6 +17,20 @@ vi.mock('@fontsource/noto-sans-thai/files/noto-sans-thai-thai-400-normal.woff', 
 vi.mock('@fontsource/noto-sans-thai/files/noto-sans-thai-thai-700-normal.woff', () => ({
   default: `${process.cwd()}/node_modules/@fontsource/noto-sans-thai/files/noto-sans-thai-thai-700-normal.woff`,
 }));
+vi.mock('@fontsource/noto-sans-thai/files/noto-sans-thai-latin-400-normal.woff', () => ({
+  default: `${process.cwd()}/node_modules/@fontsource/noto-sans-thai/files/noto-sans-thai-latin-400-normal.woff`,
+}));
+vi.mock('@fontsource/noto-sans-thai/files/noto-sans-thai-latin-700-normal.woff', () => ({
+  default: `${process.cwd()}/node_modules/@fontsource/noto-sans-thai/files/noto-sans-thai-latin-700-normal.woff`,
+}));
+
+function saveQaPdf(name: string, buffer: Buffer) {
+  if (!process.env.IDRS_PDF_QA_DIR) return;
+  mkdirSync(process.env.IDRS_PDF_QA_DIR, { recursive: true });
+  writeFileSync(join(process.env.IDRS_PDF_QA_DIR, name), buffer);
+}
+
+const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 const fixture: ChartExportData = {
   patient: {
@@ -160,5 +180,132 @@ describe('ClinicalChartPdfDocument', () => {
     const buffer = await renderToBuffer(<ClinicalChartPdfDocument data={fixture} />);
 
     expect(buffer.byteLength).toBeGreaterThan(10_000);
+    saveQaPdf('complete.pdf', buffer);
   }, 30_000);
+
+  it('renders UI visuals and an unannotated X-ray with separate AI findings', async () => {
+    const data: ChartExportData = {
+      ...fixture,
+      images: [
+        { image_id: 'xray-1', image_type: 'panoramic_xray', image_file: 'xray.png', image_url: PIXEL, description: 'Pre-treatment panoramic', uploaded_at: '2026-09-30T08:00:00Z' },
+        { image_id: 'photo-1', image_type: 'intraoral', image_file: 'photo.png', image_url: PIXEL, description: 'Occlusal view', uploaded_at: '2026-09-30T08:05:00Z' },
+      ],
+    };
+    const assets: ChartPdfAssets = {
+      pictures: { '/Plane/pararell.png': PIXEL, '/LipLenght.png': PIXEL, '/classification-malocclusion-angle-diagramme-orthodontie-sherbrooke.jpg': PIXEL },
+      teeth: { side: { 16: PIXEL, 36: PIXEL, 47: PIXEL }, occl: { 16: PIXEL } },
+      muscleViews: { right: PIXEL, front: PIXEL, left: PIXEL },
+      clinicalImages: { 'xray-1': PIXEL },
+      aiAnalyses: [{
+        imageId: 'xray-1',
+        modelName: 'DentexSegAndDet',
+        modelVersion: 'v1.0',
+        result: {
+          image_size: { width: 2800, height: 1316 },
+          detections: [
+            { disease: 'Caries', confidence: 0.81, bbox: [400, 500, 520, 640], tooth_fdi: 16 },
+            { disease: 'Impacted', confidence: 0.64, bbox: [2400, 700, 2600, 900], tooth_fdi: null },
+          ],
+          teeth: [],
+        },
+      }],
+    };
+
+    const buffer = await renderToBuffer(<ClinicalChartPdfDocument data={data} assets={assets} />);
+
+    expect(buffer.byteLength).toBeGreaterThan(10_000);
+  }, 30_000);
+
+  it('separates the esthetic pages and excludes AI overlays from the panoramic image', () => {
+    const text: string[] = [];
+    const titles: string[] = [];
+    const componentNames: string[] = [];
+    function visit(node: ReactNode): void {
+      Children.forEach(node, (child) => {
+        if (typeof child === 'string') text.push(child);
+        if (!isValidElement<{ children?: ReactNode; title?: string }>(child)) return;
+        if (child.props.title) titles.push(child.props.title);
+        if (typeof child.type === 'function') {
+          componentNames.push(child.type.name);
+          visit((child.type as (props: unknown) => ReactNode)(child.props));
+        } else {
+          visit(child.props.children);
+        }
+      });
+    }
+
+    visit(ClinicalChartPdfDocument({ data: {
+      ...fixture,
+      images: [{ image_id: 'xray-1', image_type: 'panoramic_xray', image_url: PIXEL }],
+    } }));
+
+    expect(titles.filter((title) => title.startsWith('Esthetic Evaluation /'))).toHaveLength(4);
+    expect(componentNames).toContain('PanoramicHero');
+    expect(componentNames).not.toContain('AiBoxes');
+    expect(text.join(' ')).not.toContain('AI overlay:');
+  });
+
+  it('paginates gallery categories into four-image sheets without losing images', async () => {
+    const data: ChartExportData = {
+      ...fixture,
+      images: [
+        { image_id: 'xray', image_type: 'panoramic_xray', image_url: PIXEL },
+        ...Array.from({ length: 9 }, (_, index) => ({ image_id: `photo-${index}`, image_type: 'intraoral', image_url: PIXEL, description: `Clinical view ${index + 1}` })),
+        { image_id: 'reference', image_type: 'other', image_url: PIXEL },
+      ],
+    };
+    const document = ClinicalChartPdfDocument({ data });
+    const gallery = Children.toArray(document.props.children).find((child) => isValidElement(child) && typeof child.type === 'function' && child.type.name === 'ImageGalleryPage');
+    expect(isValidElement(gallery)).toBe(true);
+    if (!isValidElement(gallery) || typeof gallery.type !== 'function') throw new Error('Gallery component missing');
+    const result = (gallery.type as (props: unknown) => ReactNode)(gallery.props);
+    if (!isValidElement<{ children: ReactNode }>(result)) throw new Error('Gallery pages missing');
+    const pages = Children.toArray(result.props.children).filter(isValidElement<{ title: string; subtitle: string }>);
+
+    expect(pages.map((page) => page.props.title)).toEqual([
+      'Image Gallery / Panoramic X-ray',
+      'Image Gallery / Intraoral',
+      'Image Gallery / Intraoral',
+      'Image Gallery / Intraoral',
+      'Image Gallery / Other',
+    ]);
+    expect(pages.map((page) => page.props.subtitle.split('  |')[0])).toEqual([
+      '1-1 of 1 images', '1-4 of 9 images', '5-8 of 9 images', '9-9 of 9 images', '1-1 of 1 images',
+    ]);
+    const buffer = await renderToBuffer(document);
+    expect(buffer.byteLength).toBeGreaterThan(10_000);
+  }, 30_000);
+  it('keeps missing answers unselected and prints partial export limitations', async () => {
+    const selected: Record<string, unknown> = {};
+    const text: string[] = [];
+    const missing = { ...fixture, medical_history: null, extraoral_exam: null, vdo_evaluation: null };
+    const assets = { ...emptyChartPdfAssets(), warnings: ['Saved AI findings: unavailable.', 'Clinical image photo-1: unavailable.'] };
+    function visit(node: ReactNode): void {
+      Children.forEach(node, (child) => {
+        if (typeof child === 'string') text.push(child);
+        if (!isValidElement<{ children?: ReactNode; group?: { title: string }; selected?: unknown }>(child)) return;
+        if (typeof child.type === 'function') {
+          if (child.type.name === 'OptionCards') selected[child.props.group!.title] = child.props.selected;
+          visit((child.type as (props: unknown) => ReactNode)(child.props));
+        } else visit(child.props.children);
+      });
+    }
+    visit(ClinicalChartPdfDocument({ data: missing, assets }));
+    expect(selected['Known Allergies']).toBeUndefined();
+    expect(selected['Regular Doctor Visits?']).toBeUndefined();
+    expect(text.join(' ')).toContain('Export limitations');
+    expect(text.join(' ')).toContain('Saved AI findings: unavailable.');
+    expect(text.join(' ')).toContain('Not recorded');
+    const buffer = await renderToBuffer(<ClinicalChartPdfDocument data={missing} assets={assets} />);
+    saveQaPdf('partial.pdf', buffer);
+  });
+
+  it('renders long Thai notes across pages without discarding the end of the note', async () => {
+    const note = 'ข้อมูลการตรวจฟันและรายละเอียดการรักษา '.repeat(500) + ' END-OF-LONG-NOTE';
+    const data = { ...fixture, medical_history: { ...fixture.medical_history, note } };
+    const buffer = await renderToBuffer(<ClinicalChartPdfDocument data={data} />);
+    expect(buffer.byteLength).toBeGreaterThan(10_000);
+    saveQaPdf('long-notes.pdf', buffer);
+  }, 30_000);
+
 });

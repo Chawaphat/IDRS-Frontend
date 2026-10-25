@@ -4,12 +4,12 @@ import { imageManagementService } from "@/services/imageManagementService";
 // ── Mock supabase storage ────────────────────────────────────────────────────
 const mockUpload = vi.fn();
 const mockRemove = vi.fn();
-const mockFrom = vi.fn(() => ({ upload: mockUpload, remove: mockRemove }));
+const mockFrom = vi.fn((_bucket: string) => ({ upload: mockUpload, remove: mockRemove }));
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     storage: {
-      from: (...args: unknown[]) => mockFrom(...args),
+      from: (bucket: string) => mockFrom(bucket),
     },
   },
 }));

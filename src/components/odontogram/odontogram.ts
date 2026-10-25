@@ -772,6 +772,12 @@ function getMobilityOptions() {
 function applyStateToSvgSingle(toothNo: Any, svg: Any) {
   const state = toothState.get(toothNo);
   if (!state || !svg) return;
+  paintToothSvg(toothNo, svg, state, { showBase, showHealthyPulp });
+  updateWarnings(state);
+}
+
+function paintToothSvg(toothNo: Any, svg: Any, state: Any, view: { showBase: boolean; showHealthyPulp: boolean }) {
+  const { showBase, showHealthyPulp } = view;
 
   // 0) Start from a clean baseline: turn OFF all switchables, then apply ON flags.
   // (Base stays as in SVG; we don't toggle #base)
@@ -1110,8 +1116,6 @@ function applyStateToSvgSingle(toothNo: Any, svg: Any) {
       }
     }
   }
-
-  updateWarnings(state);
 }
 
 function applyStateToSvg(toothNo: Any) {
@@ -1932,6 +1936,51 @@ async function loadSvg(url: Any) {
   stripDisplayNoneToDataActive(svg);
   ensureDataActiveForSwitchables(svg);
   return svg;
+}
+
+export interface RenderedToothSvg {
+  toothNo: number;
+  view: "side" | "occl";
+  svg: string;
+}
+
+const OCCL_TEMPLATE_BY_TOOTH = new Map<number, number>([
+  ...[14, 15, 24, 25, 34, 35, 44, 45].map((toothNo) => [toothNo, 14] as [number, number]),
+  ...[16, 17, 18, 26, 27, 28, 36, 37, 38, 46, 47, 48].map((toothNo) => [toothNo, 16] as [number, number]),
+]);
+
+/** Renders every tooth with the same templates and state rules as the on-screen odontogram, without touching its live state. */
+export async function renderOdontogramTeethSvgs(snapshot: OdontogramStatusSnapshot | null | undefined): Promise<RenderedToothSvg[]> {
+  const [templates, occlusalTemplates] = await Promise.all([
+    Promise.all(([11, 13, 14, 16] as const).map(async (tplNo) => [tplNo, await loadSvg(TEMPLATES[tplNo])] as const)),
+    Promise.all(([14, 16] as const).map(async (tplNo) => [tplNo, await loadSvg(TEMPLATES_OCCL[tplNo])] as const)),
+  ]);
+  const tplCache = new Map(templates);
+  const occlCache = new Map(occlusalTemplates);
+  const view = {
+    showBase: snapshot?.globals?.showBase ?? true,
+    showHealthyPulp: snapshot?.globals?.showHealthyPulp ?? true,
+  };
+  const serializer = new XMLSerializer();
+
+  const render = (toothNo: number, template: Any, rot: number, mirror: boolean) => {
+    const svg = template.cloneNode(true);
+    if (rot === 180) rotate180(svg);
+    if (mirror) mirrorVertical(svg);
+    paintToothSvg(toothNo, svg, hydrateState(snapshot?.teeth?.[toothNo]), view);
+    $$('[data-active="0"]', svg).forEach((node) => node.remove());
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    return serializer.serializeToString(svg);
+  };
+
+  const rendered: RenderedToothSvg[] = [];
+  for (const toothNo of ALL_TEETH) {
+    const map = TOOTH_TEMPLATE.get(toothNo) ?? { tpl: 16, rot: 0, mirror: false };
+    rendered.push({ toothNo, view: "side", svg: render(toothNo, tplCache.get(map.tpl), map.rot, map.mirror) });
+    const occlTpl = OCCL_TEMPLATE_BY_TOOTH.get(toothNo);
+    if (occlTpl) rendered.push({ toothNo, view: "occl", svg: render(toothNo, occlCache.get(occlTpl), map.rot, map.mirror) });
+  }
+  return rendered;
 }
 
 async function buildGrid(token: number) {
