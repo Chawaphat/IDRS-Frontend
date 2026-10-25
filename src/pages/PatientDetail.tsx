@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSectionSaveStore } from '@/store/sectionSaveStore';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
-import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Upload, Trash2, X, ChevronRight, AlertCircle, FileText, HeartPulse, Stethoscope, UserSquare2, Activity, Zap, Info, Sparkles, ScanFace, Smile, Mic2, Ruler, AlertTriangle, UserMinus, Focus, Layers, Droplets, Brain, Maximize, CalendarDays, Clock, PanelLeftClose, PanelLeft, Download } from 'lucide-react';
+import { pdf } from '@react-pdf/renderer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,6 +29,8 @@ import { patientService, type BackendPatient } from '@/services/patientService';
 import { imageManagementService } from '@/services/imageManagementService';
 import { dentalChartService } from '@/services/dentalChartService';
 import { estheticEvaluationService } from '@/services/estheticEvaluationService';
+import { ClinicalChartPdfDocument } from '@/components/ClinicalChartPdfDocument';
+import { prepareSavedChartPdf, type PreparedChartPdf } from '@/components/pdf/chartPdfExportWorkflow';
 import type { DentalChart } from '@/services/types/dentalChart';
 import { useToastStore } from '@/store/toastStore';
 import MedicalHistoryForm from '@/components/chart/MedicalHistoryForm';
@@ -129,6 +132,9 @@ export default function SequentialPatientPage() {
     const [hasMedications, setHasMedications] = useState<boolean | null>(null);
 
     const [isUploading, setIsUploading] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
+    const [pendingPdf, setPendingPdf] = useState<PreparedChartPdf | null>(null);
+    const pdfExportLock = useRef(false);
 
     useEffect(() => {
         const fetchChartDetails = async () => {
@@ -214,6 +220,46 @@ export default function SequentialPatientPage() {
         navigate(`/patients/${patientId}`);
     };
 
+    const downloadPreparedPdf = async ({ data, assets }: PreparedChartPdf) => {
+        const blob = await pdf(<ClinicalChartPdfDocument data={data} assets={assets} />).toBlob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        try {
+            link.href = url;
+            const identifier = String(data.patient.hn_number ?? chartId).replace(/[\\/:*?"<>|]/g, '-');
+            link.download = `IDRS-Clinical-Chart-${identifier}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            showToast(assets.warnings?.length ? 'Partial PDF downloaded. See Export limitations in the document.' : 'Clinical chart PDF downloaded.', assets.warnings?.length ? 'info' : 'success');
+        } finally {
+            link.remove();
+            // Allow the browser to start reading the blob before revoking it.
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        }
+    };
+
+    const handlePdfExport = async (partial?: PreparedChartPdf) => {
+        if (!chartId || pdfExportLock.current) return;
+        pdfExportLock.current = true;
+        setPendingPdf(null);
+        setIsExportingPdf(true);
+        try {
+            const prepared = partial ?? await prepareSavedChartPdf(chartId);
+            if (!partial && prepared.assets.warnings?.length) {
+                setPendingPdf(prepared);
+                return;
+            }
+            await downloadPreparedPdf(prepared);
+        } catch (err) {
+            console.error('Failed to export clinical chart PDF', err);
+            showToast(err instanceof Error && err.message.startsWith('Changes could not be saved')
+                ? err.message : 'Could not create the PDF. Please try again.', 'error');
+        } finally {
+            pdfExportLock.current = false;
+            setIsExportingPdf(false);
+        }
+    };
+
     const backPath = `/patients/${patientId}`;
 
     if (loading) {
@@ -248,7 +294,8 @@ export default function SequentialPatientPage() {
 
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 relative">
+        <>
+        <div inert={isExportingPdf || !!pendingPdf} className="flex flex-col h-full bg-slate-50 relative">
             {/* Top Header */}
             <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 shadow-sm z-10 relative gap-3">
                 <div className="flex min-w-0 items-center gap-2 sm:gap-4 border-slate-200 pr-2 sm:pr-4">
@@ -268,9 +315,15 @@ export default function SequentialPatientPage() {
                     </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-3">
-                    <Button onClick={handleSave} className="bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/10 rounded-xl h-10 sm:h-11 px-3 sm:px-6">
-                        <Save className="w-4 h-4 sm:mr-2" />
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                    <Button aria-label="Download PDF" variant="outline" onClick={() => void handlePdfExport()} disabled={isExportingPdf} className="h-10 gap-2 rounded-xl border-slate-300 px-3 text-slate-700 hover:bg-slate-100 sm:h-11 sm:px-4">
+                        <Download className="w-4 h-4" />
+                        <span className="sm:hidden">{isExportingPdf ? 'Creating...' : 'PDF'}</span>
+                        <span className="hidden sm:inline">{isExportingPdf ? 'Creating PDF...' : 'Download PDF'}</span>
+                    </Button>
+                    <Button onClick={handleSave} className="h-10 gap-2 rounded-xl bg-teal-500 px-3 text-white shadow-md shadow-teal-500/10 hover:bg-teal-600 sm:h-11 sm:px-6">
+                        <Save className="w-4 h-4" />
+                        <span className="sm:hidden">Save</span>
                         <span className="hidden sm:inline">Save record</span>
                     </Button>
                 </div>
@@ -465,6 +518,30 @@ export default function SequentialPatientPage() {
                 </div>
             )}
         </div>
+        {isExportingPdf && <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/40" role="status" aria-live="polite"><div className="rounded-2xl bg-white p-8 shadow-xl">Saving chart and preparing PDF...</div></div>}
+        {pendingPdf && (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/40 p-4">
+                <div role="dialog" aria-modal="true" aria-labelledby="pdf-warning-title" className="max-h-[85vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-xl" onKeyDown={(event) => {
+                    if (event.key === 'Escape') setPendingPdf(null);
+                    if (event.key === 'Tab') {
+                        const buttons = Array.from(event.currentTarget.querySelectorAll('button'));
+                        const first = buttons[0]; const last = buttons[buttons.length - 1];
+                        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+                    }
+                }}>
+                    <h2 id="pdf-warning-title" className="text-xl font-bold">Some content could not be loaded</h2>
+                    <p className="mt-2 text-sm text-slate-600">Retry to include the missing content, or export a partial PDF with these limitations listed in the document.</p>
+                    <ul className="my-4 list-disc space-y-2 pl-5 text-sm">{pendingPdf.assets.warnings?.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+                    <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="outline" onClick={() => setPendingPdf(null)}>Cancel</Button>
+                        <Button autoFocus onClick={() => void handlePdfExport()}>Retry</Button>
+                        <Button variant="outline" onClick={() => void handlePdfExport(pendingPdf)}>Export available content</Button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }
 

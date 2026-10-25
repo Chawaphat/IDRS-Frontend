@@ -43,7 +43,12 @@ export function onChartAiAnalysesChanged(
 
 export const aiDetectionResultService = {
   /** All AI analyses run for panoramic X-rays in this chart (in practice: 0 or 1, since a chart holds one panoramic X-ray). */
-  getByChart: (chartId: string): Promise<AIDetectionAnalysis[]> => {
+  getByChart: (chartId: string, options?: { fresh?: boolean; timeout?: number }): Promise<AIDetectionAnalysis[]> => {
+    // Exports need the current persisted result rather than a prior gallery snapshot.
+    if (options?.fresh) {
+      return api.get<AIDetectionAnalysis[]>(`/dental-charts/${chartId}/ai-detection-results`, { timeout: options.timeout })
+        .then((response) => response.data);
+    }
     const cached = analysisRequests.get(chartId);
     if (cached) return cached;
 

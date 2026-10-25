@@ -1,21 +1,12 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { MUSCLE_AREAS, SIDEVIEW_MUSCLE_AREAS, formatMuscleName } from '@/components/faceMuscleAreas';
 
 export interface FaceMuscleChartProps {
     selectedMuscles: string[];
     onToggleMuscle: (muscleId: string) => void;
 }
-
-const MUSCLE_AREAS = [
-  // Screen Left (Patient Right)
-  { id: 'temporalis-R', src: '/face-svgs/l-temporalis.svg', left: '13.699%', top: '16.416%', width: '11.495%', height: '26.666%' },
-  { id: 'masseter-R', src: '/face-svgs/l-masseter.png', left: '17.494%', top: '48.708%', width: '11.941%', height: '21.291%' },
-
-  // Screen Right (Patient Left)
-  { id: 'temporalis-L', src: '/face-svgs/r-temporalis.svg', left: '74.442%', top: '16.416%', width: '11.495%', height: '26.666%' },
-  { id: 'masseter-L', src: '/face-svgs/r-masseter.png', left: '70.758%', top: '48.708%', width: '11.941%', height: '21.291%' },
-];
 
 const MUSCLE_LIST = [
     { id: 'masseter', label: 'Masseter' },
@@ -23,23 +14,6 @@ const MUSCLE_LIST = [
     { id: 'lat-pterygoid', label: 'Lateral Pterygoid' },
     { id: 'med-pterygoid', label: 'Medial Pterygoid' }
 ];
-
-const SIDEVIEW_MUSCLE_AREAS = [
-  { id: 'temporalis', src: '/face-svgs/Temporalis Sideview.svg', left: '19.604%', top: '20.435%', width: '43.750%', height: '30.029%' },
-  { id: 'lat-pterygoid', src: '/face-svgs/Lateral Pterygoid Sideview.svg', left: '38.867%', top: '48.413%', width: '20.557%', height: '17.334%' },
-  { id: 'med-pterygoid', src: '/face-svgs/Medial Pterygoid Sideview.svg', left: '42.847%', top: '56.641%', width: '15.967%', height: '22.266%' }
-];
-
-const formatMuscleName = (id: string) => {
-    const baseId = id.replace('-R', '').replace('-L', '');
-    const names: Record<string, string> = {
-        'temporalis': 'Temporalis',
-        'masseter': 'Masseter',
-        'lat-pterygoid': 'Lateral Pterygoid',
-        'med-pterygoid': 'Medial Pterygoid'
-    };
-    return names[baseId] || baseId;
-};
 
 const TooltipLabel = ({ text, flipped = false }: { text: string, flipped?: boolean }) => (
     <div className={cn(
