@@ -297,7 +297,7 @@ export default function SequentialPatientPage() {
         <>
         <div inert={isExportingPdf || !!pendingPdf} className="flex flex-col h-full bg-slate-50 relative">
             {/* Top Header */}
-            <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 shadow-sm z-10 relative gap-3">
+            <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between shrink-0 shadow-sm z-10 relative gap-3">
                 <div className="flex min-w-0 items-center gap-2 sm:gap-4 border-slate-200 pr-2 sm:pr-4">
                     <Button variant="ghost" className="p-2 h-auto text-slate-500 hover:bg-slate-100 rounded-full" onClick={() => navigateWithGuard(backPath)}>
                         <ArrowLeft className="w-5 h-5" />
@@ -316,15 +316,13 @@ export default function SequentialPatientPage() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                    <Button aria-label="Download PDF" variant="outline" onClick={() => void handlePdfExport()} disabled={isExportingPdf} className="h-10 gap-2 rounded-xl border-slate-300 px-3 text-slate-700 hover:bg-slate-100 sm:h-11 sm:px-4">
-                        <Download className="w-4 h-4" />
-                        <span className="sm:hidden">{isExportingPdf ? 'Creating...' : 'PDF'}</span>
-                        <span className="hidden sm:inline">{isExportingPdf ? 'Creating PDF...' : 'Download PDF'}</span>
+                    <Button aria-label="Download PDF" title="Export dental chart as PDF" variant="outline" onClick={() => void handlePdfExport()} disabled={isExportingPdf} className="h-10 gap-2 rounded-xl border-slate-300 px-3 text-slate-700 hover:bg-slate-100 sm:h-11 sm:px-4">
+                        <Download aria-hidden="true" className="w-4 h-4" />
+                        <span>{isExportingPdf ? 'Creating PDF...' : 'Export PDF'}</span>
                     </Button>
-                    <Button onClick={handleSave} className="h-10 gap-2 rounded-xl bg-teal-500 px-3 text-white shadow-md shadow-teal-500/10 hover:bg-teal-600 sm:h-11 sm:px-6">
-                        <Save className="w-4 h-4" />
-                        <span className="sm:hidden">Save</span>
-                        <span className="hidden sm:inline">Save record</span>
+                    <Button aria-label="Save record" title="Save clinical chart record" onClick={handleSave} className="h-10 gap-2 rounded-xl bg-teal-500 px-3 text-white shadow-md shadow-teal-500/10 hover:bg-teal-600 sm:h-11 sm:px-6">
+                        <Save aria-hidden="true" className="w-4 h-4" />
+                        <span>Save record</span>
                     </Button>
                 </div>
             </header>
